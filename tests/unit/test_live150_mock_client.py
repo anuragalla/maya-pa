@@ -13,11 +13,7 @@ import pytest
 
 from live150.live150_client import Live150MockClient
 from live150.live150_client.base import Live150Conflict, Live150NotFound, Live150Unauthorized
-from live150.live150_client.mock_client import (
-    _FIXTURES,
-    _mock_token,
-    trigger_conflict_for_testing,
-)
+from live150.live150_client.mock_client import _FIXTURES, _mock_token
 from live150.live150_client.schemas import HolisticAnalysis, InitialContext, MayaWrappedResponse
 
 NIGEL = "+19084329987"
@@ -44,9 +40,12 @@ async def test_impersonate_unknown_phone_raises_not_found(client):
         await client.impersonate("+10000000000")
 
 
-def test_conflict_helper_raises_conflict():
+def test_live150_conflict_is_a_dedicated_exception():
+    """The mock's fixture table does not model refresh-token state, so 409
+    is not reachable via `impersonate()`. This test only asserts that the
+    typed exception exists so HTTP-client code can depend on it."""
     with pytest.raises(Live150Conflict):
-        trigger_conflict_for_testing(NIGEL)
+        raise Live150Conflict(f"user {NIGEL} exists but has no active refresh tokens")
 
 
 @pytest.mark.asyncio

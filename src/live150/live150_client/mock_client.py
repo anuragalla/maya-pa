@@ -14,7 +14,7 @@ when `LIVE150_USE_MOCK=true` in local dev.
 
 from datetime import UTC, datetime
 
-from live150.live150_client.base import Live150Conflict, Live150NotFound, Live150Unauthorized
+from live150.live150_client.base import Live150NotFound, Live150Unauthorized
 from live150.live150_client.schemas import (
     HolisticAnalysis,
     ImpersonateResponse,
@@ -35,6 +35,28 @@ def _phone_for_token(access_token: str) -> str:
     if not access_token.startswith(_TOKEN_PREFIX):
         raise Live150Unauthorized(f"mock client does not recognize token: {access_token!r}")
     return access_token[len(_TOKEN_PREFIX):]
+
+
+# Shared questionnaire fixtures — same shape for every user today. Hoisted
+# out of the per-call path so we're not rebuilding identical dicts on every
+# `get_initial_context` call.
+_NUTRITION_QUESTIONNAIRE = {
+    "goals": ["balanced_macros"],
+    "restrictions": [],
+    "preferences": ["mediterranean"],
+}
+_ACTIVITY_QUESTIONNAIRE = {
+    "fitness_level": "intermediate",
+    "preferred_modalities": ["strength", "walking"],
+}
+_SLEEP_QUESTIONNAIRE = {
+    "target_hours": 7.5,
+    "chronotype": "neutral",
+}
+_MINDFULNESS_QUESTIONNAIRE = {
+    "preferred_practice": "breath_work",
+    "daily_minutes_target": 10,
+}
 
 
 # Fixture payloads keyed by phone number.
@@ -244,23 +266,10 @@ def _initial_context(
             timezone_name=fixture["timezone_name"],
             health_profile=fixture["health_profile"],
         ),
-        nutrition_questionnaire={
-            "goals": ["balanced_macros"],
-            "restrictions": [],
-            "preferences": ["mediterranean"],
-        },
-        activity_questionnaire={
-            "fitness_level": "intermediate",
-            "preferred_modalities": ["strength", "walking"],
-        },
-        sleep_questionnaire={
-            "target_hours": 7.5,
-            "chronotype": "neutral",
-        },
-        mindfulness_questionnaire={
-            "preferred_practice": "breath_work",
-            "daily_minutes_target": 10,
-        },
+        nutrition_questionnaire=_NUTRITION_QUESTIONNAIRE,
+        activity_questionnaire=_ACTIVITY_QUESTIONNAIRE,
+        sleep_questionnaire=_SLEEP_QUESTIONNAIRE,
+        mindfulness_questionnaire=_MINDFULNESS_QUESTIONNAIRE,
     )
 
 
@@ -277,8 +286,6 @@ class Live150MockClient:
     async def impersonate(self, phone_number: str) -> ImpersonateResponse:
         if phone_number not in _FIXTURES:
             raise Live150NotFound(f"no user with phone number {phone_number}")
-        # `Live150Conflict` is not exercised by any fixture today — real 409
-        # behavior should be covered against a running backend.
         return ImpersonateResponse(
             access_token=_mock_token(phone_number),
             token_type="bearer",
@@ -332,14 +339,3 @@ class Live150MockClient:
     ) -> InitialContext:
         fixture = self._fixture_for(access_token)
         return _initial_context(fixture, latitude, longitude)
-
-
-def trigger_conflict_for_testing(phone_number: str) -> None:
-    """Helper so tests can verify the 409 branch of `impersonate`.
-
-    The mock's fixture table does not model refresh-token state, so the
-    conflict path is raised synthetically via this helper when explicitly
-    wired in a test."""
-    raise Live150Conflict(
-        f"user {phone_number} exists but has no active refresh tokens"
-    )

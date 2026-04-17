@@ -12,18 +12,9 @@ from live150.live150_client import Live150HttpClient
 from live150.live150_client.base import Live150Conflict, Live150NotFound, Live150Unauthorized
 
 
-def _transport(handler):
-    return httpx.MockTransport(handler)
-
-
 def _make_client(handler) -> Live150HttpClient:
-    client = Live150HttpClient(base_url="https://api.test", dev_token="dev-abc")
-
-    def _client_factory():
-        return httpx.AsyncClient(base_url="https://api.test", transport=_transport(handler))
-
-    client._client = _client_factory  # type: ignore[assignment]
-    return client
+    http = httpx.AsyncClient(base_url="https://api.test", transport=httpx.MockTransport(handler))
+    return Live150HttpClient(base_url="https://api.test", dev_token="dev-abc", http_client=http)
 
 
 @pytest.mark.asyncio
