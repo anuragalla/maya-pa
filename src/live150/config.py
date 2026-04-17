@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     notify_url: str = "https://notify.live150.example/send"
     service_api_token: str = ""
 
+    # Live150 dev-route auth
+    # In dev: impersonate users via /api/v1/login/developer/impersonate using the dev token.
+    # In prod: a Live150 bearer token is already issued for the current user; pass it through.
+    live150_dev_token: str = ""
+    live150_bearer_token: str = ""
+    live150_use_mock: bool = False
+    live150_http_timeout_seconds: float = 30.0
+
     # OAuth
     oauth_redirect_base: str = "http://localhost:8000"
 
