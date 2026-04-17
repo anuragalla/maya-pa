@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 
 from live150.reminders.parser import ParsedSchedule, parse_schedule, validate_schedule
@@ -50,9 +52,25 @@ async def test_parse_iso_datetime():
 
 
 @pytest.mark.asyncio
-async def test_parse_invalid_raises():
+@patch("live150.reminders.parser._llm_parse")
+async def test_regex_miss_falls_through_to_llm(mock_llm):
+    """Anything the regex can't handle routes to the Flash-Lite LLM call."""
+    mock_llm.return_value = ParsedSchedule(
+        kind="cron", expr="0 9 * * 1-5", timezone="America/Los_Angeles"
+    )
+    result = await parse_schedule("every weekday at 9am", "America/Los_Angeles")
+    assert result.kind == "cron"
+    assert result.expr == "0 9 * * 1-5"
+    mock_llm.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@patch("live150.reminders.parser._llm_parse")
+async def test_llm_invalid_output_raises(mock_llm):
+    """If the LLM returns something that fails validation, parse_schedule raises."""
+    mock_llm.return_value = ParsedSchedule(kind="cron", expr="garbage", timezone="UTC")
     with pytest.raises(ValueError):
-        await parse_schedule("gibberish nonsense", "UTC")
+        await parse_schedule("every blue moon", "UTC")
 
 
 def test_validate_invalid_cron():
