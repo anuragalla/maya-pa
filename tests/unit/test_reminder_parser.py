@@ -32,7 +32,7 @@ async def test_parse_every_day():
 async def test_parse_every_monday():
     result = await parse_schedule("every Monday", "UTC")
     assert result.kind == "cron"
-    assert "1" in result.expr  # Monday
+    assert result.expr.split()[-1] == "1"  # day-of-week field == Monday
     assert validate_schedule(result)
 
 
