@@ -1,36 +1,31 @@
+"""Vertex AI text embeddings via the Google Gen AI SDK (`google-genai`).
+
+text-embedding-005 is a regional (GA) model, so `get_genai_client` pins it to
+`settings.gcp_region` rather than whatever `GOOGLE_CLOUD_LOCATION` the process
+env happens to be set to (which may be "global" for Gemini 3.1 preview).
+"""
+
 import logging
 
-from google.cloud import aiplatform
-from google.cloud.aiplatform_v1.types import PredictRequest
-
+from live150.agent.genai_client import get_genai_client
 from live150.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class Embedder:
-    """Vertex AI text-embedding-005 client (768-dim)."""
+    """Vertex AI text-embedding-005 client (768-dim by default)."""
 
-    def __init__(self):
-        self._model_name = (
-            f"projects/{settings.gcp_project}/locations/{settings.gcp_region}"
-            f"/publishers/google/models/{settings.embedding_model}"
-        )
+    def __init__(self) -> None:
+        self._model = settings.embedding_model
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
-        """Embed a batch of texts. Max 100 per call."""
+        """Embed a batch of texts. Max 250 inputs per call (Vertex limit)."""
         if not texts:
             return []
-
-        # google-cloud-aiplatform doesn't have async embed natively;
-        # use the sync API in a thread for now.
-        import asyncio
-
-        return await asyncio.to_thread(self._embed_sync, texts)
-
-    def _embed_sync(self, texts: list[str]) -> list[list[float]]:
-        from vertexai.language_models import TextEmbeddingModel
-
-        model = TextEmbeddingModel.from_pretrained(settings.embedding_model)
-        embeddings = model.get_embeddings(texts)
-        return [e.values for e in embeddings]
+        client = get_genai_client(self._model)
+        resp = await client.aio.models.embed_content(
+            model=self._model,
+            contents=texts,
+        )
+        return [e.values for e in resp.embeddings]

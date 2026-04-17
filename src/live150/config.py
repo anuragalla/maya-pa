@@ -22,9 +22,15 @@ class Settings(BaseSettings):
     jwt_public_key_pem: str | None = None
     jwt_jwks_cache_seconds: int = 600
 
-    # Vertex AI
+    # Vertex AI / Google Gen AI SDK
+    # Set GOOGLE_GENAI_USE_VERTEXAI + GOOGLE_CLOUD_PROJECT + GOOGLE_CLOUD_LOCATION
+    # in the process environment so ADK and google-genai both target Vertex.
+    # `gcp_region` is the regional endpoint for non-preview models (embeddings).
+    # `gcp_preview_region` is used for Gemini 3.1 preview models, which are only
+    # served on the global endpoint — regional endpoints return model-not-found.
     gcp_project: str = "live150-dev"
     gcp_region: str = "us-central1"
+    gcp_preview_region: str = "global"
     default_model: str = "gemini-3-flash"
     lite_model: str = "gemini-3-1-flash-lite"
     embedding_model: str = "text-embedding-005"
@@ -33,6 +39,14 @@ class Settings(BaseSettings):
     api_base: str = "https://api.live150.example"
     notify_url: str = "https://notify.live150.example/send"
     service_api_token: str = ""
+
+    # Live150 dev-route auth
+    # In dev: impersonate users via /api/v1/login/developer/impersonate using the dev token.
+    # In prod: a Live150 bearer token is already issued for the current user; pass it through.
+    live150_dev_token: str = ""
+    live150_bearer_token: str = ""
+    live150_use_mock: bool = False
+    live150_http_timeout_seconds: float = 30.0
 
     # OAuth
     oauth_redirect_base: str = "http://localhost:8000"
