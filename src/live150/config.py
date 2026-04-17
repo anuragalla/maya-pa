@@ -22,9 +22,16 @@ class Settings(BaseSettings):
     jwt_public_key_pem: str | None = None
     jwt_jwks_cache_seconds: int = 600
 
-    # Vertex AI
+    # Vertex AI / Google Gen AI SDK
+    # Set GOOGLE_GENAI_USE_VERTEXAI + GOOGLE_CLOUD_PROJECT + GOOGLE_CLOUD_LOCATION
+    # in the process environment so ADK and google-genai both target Vertex.
+    # `gcp_region` is the regional endpoint for non-preview models (embeddings).
+    # `gcp_preview_region` is used for Gemini 3.1 preview models, which are only
+    # served on the global endpoint — regional endpoints return model-not-found.
     gcp_project: str = "live150-dev"
     gcp_region: str = "us-central1"
+    gcp_preview_region: str = "global"
+    google_genai_use_vertexai: bool = True
     default_model: str = "gemini-3-flash"
     lite_model: str = "gemini-3-1-flash-lite"
     embedding_model: str = "text-embedding-005"
