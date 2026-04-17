@@ -13,7 +13,7 @@ from typing import Literal
 from croniter import croniter
 from pydantic import BaseModel, Field
 
-from live150.agent.model_region import location_for_model
+from live150.agent.genai_client import get_genai_client
 from live150.config import settings
 
 logger = logging.getLogger(__name__)
@@ -100,13 +100,7 @@ _LLM_PROMPT = (
 
 async def _llm_parse(text: str, user_timezone: str) -> ParsedSchedule:
     """Call Flash-Lite once with a Pydantic response_schema."""
-    from google import genai
-
-    client = genai.Client(
-        vertexai=True,
-        project=settings.gcp_project,
-        location=location_for_model(settings.lite_model),
-    )
+    client = get_genai_client(settings.lite_model)
     resp = await client.aio.models.generate_content(
         model=settings.lite_model,
         contents=_LLM_PROMPT.format(user_timezone=user_timezone, text=text),

@@ -14,6 +14,9 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
 
+from live150.agent.genai_client import get_genai_client
+from live150.config import settings
+
 
 @dataclass
 class JudgeResult:
@@ -29,20 +32,8 @@ class _Verdict(BaseModel):
 
 
 async def _llm_judge(prompt: str) -> JudgeResult:
-    """Run a single LLM judge call with structured output.
-
-    Lazy imports keep `google-genai` out of the hot path for tests that
-    don't touch the eval harness."""
-    from google import genai
-
-    from live150.agent.model_region import location_for_model
-    from live150.config import settings
-
-    client = genai.Client(
-        vertexai=True,
-        project=settings.gcp_project,
-        location=location_for_model(settings.default_model),
-    )
+    """Run a single LLM judge call with structured output."""
+    client = get_genai_client(settings.default_model)
     resp = await client.aio.models.generate_content(
         model=settings.default_model,
         contents=prompt,

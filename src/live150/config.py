@@ -31,7 +31,6 @@ class Settings(BaseSettings):
     gcp_project: str = "live150-dev"
     gcp_region: str = "us-central1"
     gcp_preview_region: str = "global"
-    google_genai_use_vertexai: bool = True
     default_model: str = "gemini-3-flash"
     lite_model: str = "gemini-3-1-flash-lite"
     embedding_model: str = "text-embedding-005"
