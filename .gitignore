@@ -1,3 +1,4 @@
+# Python
 .venv/
 __pycache__/
 *.pyc
@@ -5,13 +6,27 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-.env
-.env.local
-CLAUDE.local.md
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Node / Bun
+node_modules/
+web/dist/
+bun.lock
+
+# Env
+.env
+.env.local
+CLAUDE.local.md
+
+# Data
 logs/
 backups/
 pgdata/
 *.sql.gz
+
+# Skills
+.agents/
+.claude/skills/
+skills-lock.json
