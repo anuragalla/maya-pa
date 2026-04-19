@@ -21,6 +21,7 @@ from live150.tools.integration_tools import (
     request_integration_connect,
 )
 from live150.tools.memory_tools import save_memory, search_memory
+from live150.tools.nams_tools import log_nams
 from live150.tools.reminder_tools import cancel_reminder, create_reminder, list_reminders
 from live150.tools.skill_tools import skill_load, skill_search
 
@@ -50,6 +51,8 @@ def build_tool_registry() -> list[FunctionTool]:
         FunctionTool(func=get_health_goals),
         FunctionTool(func=get_meal_plan),
         FunctionTool(func=get_initial_context),
+        # NAMS logging
+        FunctionTool(func=log_nams),
         # Memory
         FunctionTool(func=search_memory),
         FunctionTool(func=save_memory),
