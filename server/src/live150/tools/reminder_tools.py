@@ -5,11 +5,8 @@ apscheduler_jobs table; our reminder table holds user-facing metadata.
 """
 
 import logging
-from datetime import datetime, timezone
+import uuid
 
-from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.date import DateTrigger
-from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 from uuid6 import uuid7
 
@@ -24,18 +21,18 @@ logger = logging.getLogger(__name__)
 
 
 def _make_trigger(kind: str, expr: str, tz: str):
-    """Convert a ParsedSchedule into an APScheduler trigger."""
+    from apscheduler.triggers.cron import CronTrigger
+    from apscheduler.triggers.date import DateTrigger
+    from apscheduler.triggers.interval import IntervalTrigger
+    from datetime import datetime
+
     if kind == "once":
         return DateTrigger(run_date=datetime.fromisoformat(expr), timezone=tz)
     elif kind == "cron":
         fields = expr.split()
         return CronTrigger(
-            minute=fields[0],
-            hour=fields[1],
-            day=fields[2],
-            month=fields[3],
-            day_of_week=fields[4],
-            timezone=tz,
+            minute=fields[0], hour=fields[1], day=fields[2],
+            month=fields[3], day_of_week=fields[4], timezone=tz,
         )
     elif kind == "interval":
         return IntervalTrigger(seconds=int(expr), timezone=tz)
@@ -63,16 +60,12 @@ async def create_reminder(
     """
     user_id = tool_context.state["user_id"]
 
-    # Get user timezone from profile
-    user_tz = "UTC"
     async with async_session_factory() as db:
         profile = (await db.execute(
             select(UserProfile).where(UserProfile.user_id == user_id)
         )).scalar_one_or_none()
-        if profile:
-            user_tz = profile.timezone
+        user_tz = profile.timezone if profile else "UTC"
 
-    # Parse the schedule expression
     schedule_text = recurrence or when
     try:
         schedule = await parse_schedule(schedule_text, user_tz)
@@ -85,9 +78,8 @@ async def create_reminder(
     reminder_id = uuid7()
     job_id = f"reminder:{reminder_id}"
 
-    # Save to our reminder table
     async with async_session_factory() as db:
-        reminder = Reminder(
+        db.add(Reminder(
             reminder_id=reminder_id,
             user_id=user_id,
             created_by="agent",
@@ -98,32 +90,32 @@ async def create_reminder(
             timezone=schedule.timezone,
             job_id=job_id,
             status="active",
-        )
-        db.add(reminder)
+        ))
         await db.commit()
 
-    # Register with APScheduler
+    trigger = _make_trigger(schedule.kind, schedule.expr, schedule.timezone)
+    get_scheduler().add_job(
+        fire_reminder,
+        trigger=trigger,
+        args=[str(reminder_id)],
+        id=job_id,
+        name=title,
+        replace_existing=True,
+    )
+
+    # Best-effort: mirror to connected calendars
     try:
-        trigger = _make_trigger(schedule.kind, schedule.expr, schedule.timezone)
-        scheduler = get_scheduler()
-        scheduler.add_job(
-            fire_reminder,
-            trigger=trigger,
-            args=[str(reminder_id)],
-            id=job_id,
-            name=title,
-            replace_existing=True,
-        )
+        from live150.calendar.mirror import mirror_reminder_to_calendar
+        from live150.tools.calendar_tools import _cal_service
+        if _cal_service is not None:
+            async with async_session_factory() as db:
+                reminder_row = (await db.execute(
+                    select(Reminder).where(Reminder.reminder_id == reminder_id)
+                )).scalar_one_or_none()
+                if reminder_row:
+                    await mirror_reminder_to_calendar(reminder_row, _cal_service, db)
     except Exception as e:
-        logger.error("Failed to register job with scheduler", extra={"error": str(e)})
-        # Job is in DB but not scheduled — will be picked up on scheduler restart
-        return {
-            "created": True,
-            "reminder_id": str(reminder_id),
-            "title": title,
-            "schedule": f"{schedule.kind}: {schedule.expr} ({schedule.timezone})",
-            "warning": "Saved but scheduler registration pending — will activate on next restart.",
-        }
+        logger.warning("Calendar mirror failed for reminder %s: %s", reminder_id, e)
 
     return {
         "created": True,
@@ -134,20 +126,15 @@ async def create_reminder(
 
 
 async def list_reminders(tool_context=None) -> dict:
-    """List the user's active and paused reminders.
-
-    Returns all reminders that haven't been cancelled, with their
-    schedule, status, and when they last fired.
-    """
+    """List the user's active and paused reminders."""
     user_id = tool_context.state["user_id"]
 
     async with async_session_factory() as db:
-        stmt = (
+        result = await db.execute(
             select(Reminder)
             .where(Reminder.user_id == user_id, Reminder.status.in_(["active", "paused"]))
             .order_by(Reminder.created_at.desc())
         )
-        result = await db.execute(stmt)
         reminders = result.scalars().all()
 
     if not reminders:
@@ -170,37 +157,38 @@ async def list_reminders(tool_context=None) -> dict:
 
 
 async def cancel_reminder(reminder_id: str, tool_context=None) -> dict:
-    """Cancel an active reminder by its ID.
-
-    The reminder will stop firing and be marked as cancelled.
-
-    Args:
-        reminder_id: The ID of the reminder to cancel (from list_reminders).
-    """
+    """Cancel an active reminder by its ID."""
     user_id = tool_context.state["user_id"]
 
     async with async_session_factory() as db:
-        import uuid
-        stmt = select(Reminder).where(
-            Reminder.reminder_id == uuid.UUID(reminder_id),
-            Reminder.user_id == user_id,
-        )
-        reminder = (await db.execute(stmt)).scalar_one_or_none()
+        reminder = (await db.execute(
+            select(Reminder).where(
+                Reminder.reminder_id == uuid.UUID(reminder_id),
+                Reminder.user_id == user_id,
+            )
+        )).scalar_one_or_none()
 
         if not reminder:
             return {"cancelled": False, "error": "Reminder not found."}
-
         if reminder.status == "cancelled":
             return {"cancelled": False, "error": "Reminder is already cancelled."}
 
         reminder.status = "cancelled"
         await db.commit()
 
-    # Remove from APScheduler
     try:
-        scheduler = get_scheduler()
-        scheduler.remove_job(reminder.job_id)
+        get_scheduler().remove_job(reminder.job_id)
     except Exception:
-        pass  # Job may not be in scheduler if it was a one-shot that already fired
+        pass
+
+    # Best-effort: remove mirrored calendar events
+    try:
+        from live150.calendar.mirror import unmirror_reminder_from_calendar
+        from live150.tools.calendar_tools import _cal_service
+        if _cal_service is not None:
+            async with async_session_factory() as db:
+                await unmirror_reminder_from_calendar(uuid.UUID(reminder_id), _cal_service, db)
+    except Exception as e:
+        logger.warning("Calendar unmirror failed for reminder %s: %s", reminder_id, e)
 
     return {"cancelled": True, "reminder_id": reminder_id, "title": reminder.title}

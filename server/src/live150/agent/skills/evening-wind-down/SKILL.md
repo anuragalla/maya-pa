@@ -22,7 +22,7 @@ description: Produce an evening check-in or wind-down nudge. Use when the user m
 1. Today's activity so far (`get_activity_summary(days=1)`)
 2. Today's nutrition if logged (`get_meal_log(days=1)`)
 3. This morning's asks from memory — search `"today's morning brief actions"` or the most recent `save_memory` entry of `kind="note"`
-4. Tomorrow's first commitment from calendar (only if connected) — dictates bedtime target
+4. Tomorrow's first commitment — call `get_calendar_schedule(days=1)` if a calendar is connected. If not connected, skip — do not offer to connect during a proactive skill.
 5. User's chronotype and typical bedtime from `user_profile_summary`
 
 ## Output shape

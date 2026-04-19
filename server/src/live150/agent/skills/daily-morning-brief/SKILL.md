@@ -23,7 +23,7 @@ Before writing, make sure you have:
 1. Last night's sleep (`get_sleep_summary(days=1)`)
 2. Yesterday's activity (`get_activity_summary(days=1)`)
 3. Recovery / HRV reading if the user's devices provide it
-4. Today's calendar load (only if Google Calendar is connected — otherwise skip)
+4. Today's calendar load — call `get_calendar_schedule(days=1)` if a calendar is connected. If not connected, skip — do not offer to connect during a proactive skill.
 5. Active plan from `user_profile_summary`
 
 If any of the first two are missing, ask in one line: *"I can't pull your sleep from last night — how did it feel, rough scale 1–10?"* and work from the qualitative answer.

@@ -12,11 +12,14 @@ from live150.config import settings
 from live150.crypto.vault import Vault
 from live150.db.models.oauth_token import OAuthToken
 from live150.db.session import get_db
+from live150.db.models.connect_state import ConnectState
+from live150.db.models.user_calendar import UserCalendar
 from live150.oauth.flow import exchange_code, generate_auth_url, revoke_token, verify_state
 from live150.oauth.providers import PROVIDERS
+from live150.tools.integration_tools import verify_state_token
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/oauth", tags=["oauth"])
+router = APIRouter(tags=["oauth"])
 
 
 def _get_vault() -> Vault:
@@ -42,15 +45,36 @@ async def oauth_callback(
     if provider not in PROVIDERS:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
 
-    try:
-        state_data = verify_state(state)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid or expired state")
+    # Try connect-state (HMAC) first, then fall back to JWT state
+    user_id: str | None = None
+    connect_state_row: ConnectState | None = None
 
-    if state_data.get("provider") != provider:
-        raise HTTPException(status_code=400, detail="Provider mismatch")
+    cs_stmt = select(ConnectState).where(ConnectState.state_token == state)
+    connect_state_row = (await db.execute(cs_stmt)).scalar_one_or_none()
 
-    user_id = state_data["sub"]
+    if connect_state_row is not None:
+        # Validate HMAC signature + expiry
+        if connect_state_row.consumed_at is not None:
+            raise HTTPException(status_code=400, detail="State already consumed")
+        if connect_state_row.expires_at < datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="State expired")
+        if connect_state_row.provider != provider:
+            raise HTTPException(status_code=400, detail="Provider mismatch")
+        if not verify_state_token(state, connect_state_row.user_id, provider):
+            raise HTTPException(status_code=400, detail="Invalid state signature")
+
+        user_id = connect_state_row.user_id
+        connect_state_row.consumed_at = datetime.now(timezone.utc)
+    else:
+        # Fall back to JWT state (existing flow)
+        try:
+            state_data = verify_state(state)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid or expired state")
+        if state_data.get("provider") != provider:
+            raise HTTPException(status_code=400, detail="Provider mismatch")
+        user_id = state_data["sub"]
+
     token_data = await exchange_code(provider, code)
 
     vault = _get_vault()
@@ -66,7 +90,7 @@ async def oauth_callback(
     if "expires_in" in token_data:
         access_expires_at = datetime.now(timezone.utc) + timedelta(seconds=token_data["expires_in"])
 
-    # Upsert
+    # Upsert oauth_token
     stmt = select(OAuthToken).where(OAuthToken.user_id == user_id, OAuthToken.provider == provider)
     existing = (await db.execute(stmt)).scalar_one_or_none()
 
@@ -95,18 +119,49 @@ async def oauth_callback(
         )
         db.add(row)
 
+    # Upsert user_calendar row for calendar-category integrations
+    if connect_state_row is not None:
+        uc_stmt = select(UserCalendar).where(
+            UserCalendar.user_id == user_id, UserCalendar.provider == provider
+        )
+        uc = (await db.execute(uc_stmt)).scalar_one_or_none()
+        if uc is None:
+            db.add(UserCalendar(
+                user_id=user_id,
+                provider=provider,
+                preferred=True,
+            ))
+
     await db.commit()
 
-    # Return HTML that deep-links back to the Live150 app
+    # Eagerly create the Live150 sub-calendar if this is a calendar integration
+    if connect_state_row is not None:
+        try:
+            from live150.calendar.registry import CalendarProviderRegistry
+            registry = CalendarProviderRegistry(vault)
+            client = await registry.get_provider(user_id, provider, db)
+            cal_id = await client.ensure_managed_calendar("Live150", "UTC")
+            # Update user_calendar with the calendar_id
+            uc_row = (await db.execute(
+                select(UserCalendar).where(
+                    UserCalendar.user_id == user_id, UserCalendar.provider == provider
+                )
+            )).scalar_one_or_none()
+            if uc_row:
+                uc_row.calendar_id = cal_id
+                await db.commit()
+        except Exception as e:
+            logger.warning("Failed to eagerly create Live150 calendar: %s", e)
+
+    # Redirect back to the web app
+    redirect_url = f"{settings.oauth_success_redirect}/oauth/success?provider={provider}"
     return HTMLResponse(
-        content="""
+        content=f"""
         <html><body>
         <h2>Connected!</h2>
-        <p>You can close this window and return to the Live150 app.</p>
-        <script>
-            // Try to deep-link back to the app
-            window.location.href = "live150://oauth/success?provider=""" + provider + """";
-        </script>
+        <p>Redirecting back to Live150...</p>
+        <script>window.location.href = "{redirect_url}";</script>
+        <p>If not redirected, <a href="{redirect_url}">click here</a>.</p>
         </body></html>
         """,
         status_code=200,

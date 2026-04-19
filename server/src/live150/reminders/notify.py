@@ -24,14 +24,14 @@ class NotifyClient:
         Retries with exponential backoff: 1s, 2s, 4s.
         On final failure, raises the exception (caller should log to audit).
         """
+        headers = {}
+        if settings.service_api_token:
+            headers["Authorization"] = f"Bearer {settings.service_api_token}"
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 settings.notify_url,
-                json={
-                    "user_id": user_id,
-                    **payload,
-                },
-                headers={"Authorization": f"Bearer {settings.service_api_token}"},
+                json={"user_id": user_id, **payload},
+                headers=headers,
             )
             resp.raise_for_status()
             logger.info("Notification sent", extra={"user_id": user_id})

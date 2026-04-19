@@ -31,7 +31,7 @@ Test users: Nigel (+19084329987), Murthy (+19083612019), Pragya (+12243347204)
 
 ## Streaming
 
-`POST /api/chat` speaks the Vercel AI SDK data stream protocol. The React frontend uses `useChat` from `@ai-sdk/react`.
+`POST /api/v1/stream/chat` speaks the Vercel AI SDK data stream protocol. The React frontend uses `useChat` from `@ai-sdk/react`. All API routes are versioned under `/api/v1`.
 
 ## Project Layout
 

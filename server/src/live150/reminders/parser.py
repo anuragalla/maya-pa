@@ -65,10 +65,15 @@ def _regex_parse(text: str, user_timezone: str) -> ParsedSchedule | None:
         if len(parts) >= 2:
             try:
                 amount = int(parts[0])
-                unit = parts[1].rstrip("s")
-                deltas = {"hour": "hours", "minute": "minutes", "day": "days"}
-                if unit in deltas:
-                    dt = datetime.now(UTC) + timedelta(**{deltas[unit]: amount})
+                unit = parts[1].rstrip("s").lower()  # "secs"→"sec", "hours"→"hour"
+                unit_to_kwarg = {
+                    "sec": "seconds", "second": "seconds",
+                    "min": "minutes", "minute": "minutes",
+                    "hour": "hours", "hr": "hours",
+                    "day": "days", "week": "weeks",
+                }
+                if unit in unit_to_kwarg:
+                    dt = datetime.now(UTC) + timedelta(**{unit_to_kwarg[unit]: amount})
                     return ParsedSchedule(kind="once", expr=dt.isoformat(), timezone=user_timezone)
             except (ValueError, IndexError):
                 pass
@@ -89,11 +94,14 @@ def _regex_parse(text: str, user_timezone: str) -> ParsedSchedule | None:
 
 
 _LLM_PROMPT = (
-    "Parse the user's natural-language schedule into a structured schedule. "
-    "Prefer `cron` for anything recurring (e.g. 'every Monday 9am'), `once` for "
-    "absolute or relative timestamps, and `interval` only when they explicitly "
-    "say 'every N minutes/hours'. Always emit an IANA timezone; if none is given, "
-    "use the user's timezone: {user_timezone}.\n\n"
+    "Parse the user's natural-language schedule into a structured schedule.\n"
+    "Rules:\n"
+    "- `once`: any phrase like 'in N seconds/minutes/hours/days', 'tomorrow at 7pm', 'next Monday'. "
+    "Compute the absolute ISO-8601 datetime from now.\n"
+    "- `cron`: recurring patterns like 'every day at 9am', 'every Monday', 'daily at noon'.\n"
+    "- `interval`: ONLY when the user explicitly says 'every N minutes/hours/seconds' (repeating indefinitely).\n"
+    "IMPORTANT: 'in N seconds' means fire ONCE in N seconds — use `once`, not `interval`.\n"
+    "Always emit an IANA timezone; if none given, use: {user_timezone}.\n\n"
     "User input: {text}"
 )
 

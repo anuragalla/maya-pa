@@ -14,7 +14,7 @@ from collections import defaultdict
 from fastapi import APIRouter, Header, Request
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/notifications", tags=["notifications"])
+router = APIRouter(tags=["notifications"])
 
 # In-memory store: phone -> list of {payload, timestamp}
 _notifications: dict[str, list[dict]] = defaultdict(list)

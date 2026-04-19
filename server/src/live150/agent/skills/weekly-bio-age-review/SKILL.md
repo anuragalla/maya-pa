@@ -25,7 +25,8 @@ description: Produce the user's weekly review. Use when the user asks for a "wee
    - Mindfulness / stress signal if tracked
 2. Adherence notes from memory for the past week — search `"adherence"` and the prior week's plan
 3. Biological age reading from wearable if present, compared to previous reading
-4. Last week's plan from memory — what did you ask of them?
+4. This week's calendar context — call `get_calendar_schedule(days=7)` if a calendar is connected. If not connected, skip — do not offer to connect during a proactive skill.
+5. Last week's plan from memory — what did you ask of them?
 
 ## Output shape
 

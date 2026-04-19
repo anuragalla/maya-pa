@@ -2,12 +2,23 @@
 
 from google.adk.tools import FunctionTool
 
+from live150.tools.calendar_tools import (
+    check_calendar_connection,
+    create_live150_event,
+    delete_live150_event,
+    find_free_slots,
+    get_calendar_schedule,
+)
 from live150.tools.health_api import (
     get_holistic_analysis,
     get_progress_by_date,
     get_health_goals,
     get_meal_plan,
     get_initial_context,
+)
+from live150.tools.integration_tools import (
+    list_available_integrations,
+    request_integration_connect,
 )
 from live150.tools.memory_tools import save_memory, search_memory
 from live150.tools.reminder_tools import cancel_reminder, create_reminder, list_reminders
@@ -22,6 +33,11 @@ REMINDER_SAFE_TOOLS = {
     "list_reminders",
     "skill_search",
     "skill_load",
+    # Calendar reads are safe in reminder mode
+    "get_calendar_schedule",
+    "check_calendar_connection",
+    "find_free_slots",
+    "list_available_integrations",
 }
 
 
@@ -44,5 +60,14 @@ def build_tool_registry() -> list[FunctionTool]:
         # Skills (on-demand runbook loading)
         FunctionTool(func=skill_search),
         FunctionTool(func=skill_load),
+        # Calendar
+        FunctionTool(func=get_calendar_schedule),
+        FunctionTool(func=create_live150_event),
+        FunctionTool(func=delete_live150_event),
+        FunctionTool(func=find_free_slots),
+        FunctionTool(func=check_calendar_connection),
+        # Integrations
+        FunctionTool(func=list_available_integrations),
+        FunctionTool(func=request_integration_connect),
     ]
     return tools

@@ -18,7 +18,7 @@ from live150.db.models.chat_session import ChatSession
 from live150.db.session import get_db
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/chat", tags=["chat"])
+router = APIRouter(tags=["chat"])
 
 # Singleton runner — built on first request
 _runner: Live150Runner | None = None

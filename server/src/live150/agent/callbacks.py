@@ -15,6 +15,12 @@ REMINDER_SAFE_TOOLS = {
     "get_health_goals",
     "search_memory",
     "list_reminders",
+    "skill_search",
+    "skill_load",
+    "get_calendar_schedule",
+    "check_calendar_connection",
+    "find_free_slots",
+    "list_available_integrations",
 }
 
 _turn_start_times: dict[str, float] = {}
@@ -46,15 +52,16 @@ def before_model_cb(callback_context: Any, llm_request: Any) -> None:
     if hasattr(llm_request, "model"):
         llm_request.model = chosen_model
 
-    # Set thinking budget to high (8192 tokens)
+    # Reminders don't need deep reasoning — disable thinking to keep them fast
+    thinking_budget = 0 if state.get("turn_context") == "reminder" else 8192
     if hasattr(llm_request, "config") and llm_request.config is not None:
         llm_request.config.thinking_config = types.ThinkingConfig(
-            thinking_budget=8192,
+            thinking_budget=thinking_budget,
         )
     elif hasattr(llm_request, "config"):
         llm_request.config = types.GenerateContentConfig(
             thinking_config=types.ThinkingConfig(
-                thinking_budget=8192,
+                thinking_budget=thinking_budget,
             ),
         )
 

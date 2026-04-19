@@ -16,8 +16,12 @@ class Settings(BaseSettings):
     # Live150 API
     api_base: str = "https://lifecloud.eng.sandbox.healthhustler.io"
     dev_token: str = ""
-    notify_url: str = "http://localhost:8000/api/notifications/push"
+    notify_url: str = "http://localhost:8000/api/v1/notifications/push"
     service_api_token: str = ""
+
+    # OAuth
+    oauth_redirect_base: str = "http://localhost:8000/api/v1"  # base URL for OAuth callbacks
+    oauth_success_redirect: str = "http://localhost:3000"  # where to redirect after OAuth success
 
     # Crypto
     master_key: str = ""  # base64-encoded 32-byte key

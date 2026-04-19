@@ -8,13 +8,14 @@ The user's local time is injected fresh on every turn.
 import logging
 import uuid
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from google.adk.agents import LlmAgent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,10 @@ class Live150Runner:
             tz_name = session.state.get("user_timezone", "UTC")
             session.state["user_local_time"] = _user_local_time(tz_name)
 
+        # Sync-on-chat: refresh calendar snapshot if stale (>1 hour)
+        if turn_context == "interactive":
+            await self._maybe_sync_calendar(user_id, session)
+
         content = types.Content(
             role="user",
             parts=[types.Part.from_text(text=message)],
@@ -107,3 +112,44 @@ class Live150Runner:
             new_message=content,
         ):
             yield event
+
+    async def _maybe_sync_calendar(self, user_id: str, session: Any) -> None:
+        """Sync calendar snapshot if connected and last sync > 1 hour ago."""
+        try:
+            from live150.db.models.user_calendar import UserCalendar
+            from live150.db.models.oauth_token import OAuthToken
+            from live150.db.session import async_session_factory
+
+            async with async_session_factory() as db:
+                uc = (await db.execute(
+                    select(UserCalendar).where(
+                        UserCalendar.user_id == user_id,
+                        UserCalendar.preferred == True,  # noqa: E712
+                    )
+                )).scalar_one_or_none()
+
+                if uc is None:
+                    # No calendar connected — populate state accordingly
+                    session.state["connected_integrations"] = []
+                    session.state["calendar_needs_reconnect"] = False
+                    return
+
+                # Populate integration state
+                session.state["connected_integrations"] = [f"{uc.provider}_calendar"]
+                session.state["calendar_needs_reconnect"] = uc.last_sync_status == "auth_failed"
+
+                # Check if sync is needed
+                now = datetime.now(timezone.utc)
+                if uc.last_sync_at and (now - uc.last_sync_at) < timedelta(hours=1):
+                    return  # Fresh enough
+
+                # Trigger sync
+                from live150.tools.calendar_tools import _get_service
+                try:
+                    svc = _get_service()
+                    await svc.sync_snapshot(user_id, db)
+                    logger.info("Calendar synced on chat entry for user=%s", user_id)
+                except Exception as e:
+                    logger.warning("Calendar sync failed for user=%s: %s", user_id, e)
+        except Exception as e:
+            logger.debug("Calendar sync check skipped: %s", e)

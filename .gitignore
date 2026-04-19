@@ -2,23 +2,17 @@
 .venv/
 __pycache__/
 *.pyc
-*.pyo
-*.egg-info/
-dist/
-build/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
 
-# Node / Bun
+# Node
 node_modules/
-web/dist/
-bun.lock
 
 # Env
 .env
 .env.local
 CLAUDE.local.md
+
+# IDE
+.DS_Store
 
 # Data
 logs/
@@ -30,3 +24,6 @@ pgdata/
 .agents/
 .claude/skills/
 skills-lock.json
+
+# Tool caches
+.deepeval/

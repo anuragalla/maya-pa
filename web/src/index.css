@@ -1,0 +1,108 @@
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+@import "@fontsource/jetbrains-mono";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        /* Soft Wellness — Calming, health-first */
+        --background: #111118;
+        --foreground: #E8E4F0;
+        --card: #1C1B26;
+        --card-foreground: #E8E4F0;
+        --popover: #1C1B26;
+        --popover-foreground: #E8E4F0;
+        --primary: #8B5CF6;
+        --primary-foreground: #FFFFFF;
+        --secondary: #1C1B26;
+        --secondary-foreground: #E8E4F0;
+        --muted: #1C1B26;
+        --muted-foreground: #A39BB8;
+        --accent: #67E8F9;
+        --accent-foreground: #111118;
+        --destructive: #FB7185;
+        --destructive-foreground: #FFFFFF;
+        --success: #4ADE80;
+        --notification: #FCD34D;
+        --border: #28243A;
+        --input: #28243A;
+        --ring: #8B5CF6;
+        --radius: 0.625rem;
+        --surface-hover: #26243A;
+
+        /* Sidebar */
+        --sidebar: #111118;
+        --sidebar-foreground: #E8E4F0;
+        --sidebar-primary: #8B5CF6;
+        --sidebar-primary-foreground: #FFFFFF;
+        --sidebar-accent: #1C1B26;
+        --sidebar-accent-foreground: #E8E4F0;
+        --sidebar-border: #28243A;
+        --sidebar-ring: #8B5CF6;
+
+        /* Chart */
+        --chart-1: #8B5CF6;
+        --chart-2: #67E8F9;
+        --chart-3: #4ADE80;
+        --chart-4: #FCD34D;
+        --chart-5: #FB7185;
+    }
+
+    .theme {
+        --font-heading: "Inter Variable", sans-serif;
+        --font-sans: "Inter Variable", sans-serif;
+        --font-mono: "JetBrains Mono", monospace;
+    }
+
+    /* Light mode — Soft Wellness */
+    .light {
+        --background: #F8FAFB;
+        --foreground: #111118;
+        --card: #FFFFFF;
+        --card-foreground: #111118;
+        --popover: #FFFFFF;
+        --popover-foreground: #111118;
+        --primary: #7C3AED;
+        --primary-foreground: #FFFFFF;
+        --secondary: #F0F4F8;
+        --secondary-foreground: #111118;
+        --muted: #F0F4F8;
+        --muted-foreground: #5A5470;
+        --accent: #0891B2;
+        --accent-foreground: #FFFFFF;
+        --destructive: #E11D48;
+        --destructive-foreground: #FFFFFF;
+        --success: #059669;
+        --notification: #D97706;
+        --border: #E2E0EC;
+        --input: #E2E0EC;
+        --ring: #7C3AED;
+        --surface-hover: #EDEAF5;
+
+        --sidebar: #F8FAFB;
+        --sidebar-foreground: #111118;
+        --sidebar-primary: #7C3AED;
+        --sidebar-primary-foreground: #FFFFFF;
+        --sidebar-accent: #F0F4F8;
+        --sidebar-accent-foreground: #111118;
+        --sidebar-border: #E2E0EC;
+        --sidebar-ring: #7C3AED;
+
+        --chart-1: #7C3AED;
+        --chart-2: #0891B2;
+        --chart-3: #059669;
+        --chart-4: #D97706;
+        --chart-5: #E11D48;
+    }
+
+    /* Always dark — single-theme wellness app */
+    body {
+        background-color: var(--background);
+        color: var(--foreground);
+        font-family: var(--font-sans);
+    }
+}
+

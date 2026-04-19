@@ -19,10 +19,11 @@ description: Adapt the plan for travel days, flights, jet lag, or time zone chan
 
 ## Inputs you need
 
-1. **Origin and destination time zones** — ask if not stated
-2. **Flight time and direction** (east vs west matters a lot)
-3. **Purpose** (work, family, holiday) — sets expectation for adherence
-4. **Length of stay** — determines whether to try to adapt to destination or stay on origin time
+1. **Upcoming schedule** — call `get_calendar_schedule(days=14)` if a calendar is connected. Shows travel blocks, meetings at destination, return flights. If not connected, ask the user for details.
+2. **Origin and destination time zones** — ask if not stated
+3. **Flight time and direction** (east vs west matters a lot)
+4. **Purpose** (work, family, holiday) — sets expectation for adherence
+5. **Length of stay** — determines whether to try to adapt to destination or stay on origin time
 
 ## Rules of thumb
 

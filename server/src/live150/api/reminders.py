@@ -16,7 +16,7 @@ from live150.db.session import get_db
 from live150.reminders.parser import parse_schedule, validate_schedule
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/reminders", tags=["reminders"])
+router = APIRouter(tags=["reminders"])
 
 
 class ReminderCreate(BaseModel):

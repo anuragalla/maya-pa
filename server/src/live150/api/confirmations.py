@@ -13,7 +13,7 @@ from live150.db.session import get_db
 from live150.safety.write_gate import resolve_confirmation
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/confirmations", tags=["confirmations"])
+router = APIRouter(tags=["confirmations"])
 
 
 @router.get("")
