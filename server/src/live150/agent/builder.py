@@ -4,7 +4,8 @@ from typing import Any
 
 from google.adk.agents import LlmAgent
 
-from live150.agent.callbacks import after_agent_cb, before_model_cb, before_tool_cb
+from live150.agent import caching
+from live150.agent.callbacks import after_agent_cb, after_model_cb, after_tool_cb, before_model_cb, before_tool_cb
 from live150.agent.model_router import DEFAULT_MODEL
 from live150.tools.registry import build_tool_registry
 
@@ -31,23 +32,19 @@ def _load_base_instruction() -> str:
 
 
 def _dynamic_instruction(callback_context: Any) -> str:
-    """Build the full instruction with live context injected from session state.
+    """Build the system instruction for this turn.
 
-    ADK calls this on every turn so the model always sees current time and profile.
+    When explicit caching is active, return an empty string — the static base
+    is served from the cache and the dynamic context is injected into the user
+    message by before_model_cb. This prevents double-billing the prefix.
+
+    Otherwise return base + dynamic context as a single inline instruction.
     """
+    if caching.is_enabled() and caching.get_cache_name():
+        return ""
+
     state = getattr(callback_context, "state", {})
-    local_time = state.get("user_local_time", "unknown")
-    timezone = state.get("user_timezone", "UTC")
-    profile = state.get("user_profile_summary", "")
-
-    context_block = (
-        f"\n\n---\n\n## Current context\n\n"
-        f"- **User's local time:** {local_time}\n"
-        f"- **Timezone:** {timezone}\n"
-    )
-    if profile:
-        context_block += f"\n### User profile\n\n{profile}\n"
-
+    context_block = "\n\n---\n\n" + caching.build_dynamic_context(state) + "\n"
     return _base_instruction + context_block
 
 
@@ -66,7 +63,9 @@ def build_agent() -> LlmAgent:
         instruction=_dynamic_instruction,
         tools=tools,
         before_model_callback=before_model_cb,
+        after_model_callback=after_model_cb,
         before_tool_callback=before_tool_cb,
+        after_tool_callback=after_tool_cb,
         after_agent_callback=after_agent_cb,
     )
 

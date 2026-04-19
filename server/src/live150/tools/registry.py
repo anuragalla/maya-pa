@@ -1,7 +1,9 @@
 """Assembles all FunctionTools into the agent's tool registry."""
 
 from google.adk.tools import FunctionTool
+from google.adk.tools.agent_tool import AgentTool
 
+from live150.agent.search_agent import build_search_agent
 from live150.tools.calendar_tools import (
     check_calendar_connection,
     create_live150_event,
@@ -72,5 +74,7 @@ def build_tool_registry() -> list[FunctionTool]:
         # Integrations
         FunctionTool(func=list_available_integrations),
         FunctionTool(func=request_integration_connect),
+        # Health web search (sub-agent)
+        AgentTool(agent=build_search_agent()),
     ]
     return tools

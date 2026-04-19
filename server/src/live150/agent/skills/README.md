@@ -22,6 +22,7 @@ The body of the skill loads only after the skill is selected. This keeps token o
 | `fasting-window` | User asks about intermittent fasting, eating windows, or meal timing |
 | `alcohol-guidance` | User asks whether/how much they can drink, or reports drinking |
 | `red-flag-routing` | User reports something medical/urgent — chest pain, self-harm, severe symptoms |
+| `local-health-search` | User asks for healthy restaurants, gyms, or wellness spots near a location |
 
 ## Writing new skills
 
