@@ -106,12 +106,33 @@ class Live150Runner:
             parts=[types.Part.from_text(text=message)],
         )
 
+        agent_response_parts: list[str] = []
+
         async for event in self.runner.run_async(
             user_id=user_id,
             session_id=str(session_id),
             new_message=content,
         ):
+            # Collect text for post-turn reflection
+            if turn_context == "interactive":
+                try:
+                    if hasattr(event, "content") and event.content and event.content.parts:
+                        for part in event.content.parts:
+                            if hasattr(part, "text") and part.text:
+                                agent_response_parts.append(part.text)
+                except Exception:
+                    pass
             yield event
+
+        # Fire-and-forget reflection after the turn completes
+        if turn_context == "interactive" and agent_response_parts:
+            from live150.agent.reflection import schedule_reflection
+            schedule_reflection(
+                user_id=user_id,
+                session_id=str(session_id),
+                user_message=message,
+                agent_response="".join(agent_response_parts),
+            )
 
     async def _maybe_sync_calendar(self, user_id: str, session: Any) -> None:
         """Sync calendar snapshot if connected and last sync > 1 hour ago."""
