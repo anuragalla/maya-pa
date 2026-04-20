@@ -30,8 +30,9 @@ jobs:
 
       - name: Package release
         run: |
-          ARCHIVE="maya-pa-${{ github.sha }}.tgz"
-          tar czf "$ARCHIVE" \
+          # Write archive OUTSIDE the workspace so tar doesn't try to
+          # include the archive it's currently writing.
+          tar czf "${RUNNER_TEMP}/maya-pa-${{ github.sha }}.tgz" \
             --exclude='.git' \
             --exclude='./web/node_modules' \
             --exclude='./server/.venv' \
@@ -43,6 +44,8 @@ jobs:
             --exclude='*.pyc' \
             --exclude='.pytest_cache' \
             .
+          ls -lh "${RUNNER_TEMP}/maya-pa-${{ github.sha }}.tgz"
+          cp "${RUNNER_TEMP}/maya-pa-${{ github.sha }}.tgz" "./maya-pa-${{ github.sha }}.tgz"
 
       - name: Copy archive to VM
         uses: appleboy/scp-action@v1.0.0
