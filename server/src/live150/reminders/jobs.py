@@ -18,6 +18,25 @@ logger = logging.getLogger(__name__)
 _notify_client = NotifyClient()
 
 
+def make_trigger(kind: str, expr: str, tz: str):
+    """Build an APScheduler trigger from a parsed schedule. Shared by tool + REST."""
+    from apscheduler.triggers.cron import CronTrigger
+    from apscheduler.triggers.date import DateTrigger
+    from apscheduler.triggers.interval import IntervalTrigger
+
+    if kind == "once":
+        return DateTrigger(run_date=datetime.fromisoformat(expr), timezone=tz)
+    if kind == "cron":
+        fields = expr.split()
+        return CronTrigger(
+            minute=fields[0], hour=fields[1], day=fields[2],
+            month=fields[3], day_of_week=fields[4], timezone=tz,
+        )
+    if kind == "interval":
+        return IntervalTrigger(seconds=int(expr), timezone=tz)
+    raise ValueError(f"Unknown schedule kind: {kind}")
+
+
 def _session_id_for_user(user_id: str) -> uuid.UUID:
     return uuid.UUID(hashlib.md5(f"live150:session:{user_id}".encode()).hexdigest())
 
@@ -121,6 +140,11 @@ async def _fire_reminder_async(reminder_id: str) -> None:
         )).scalar_one_or_none()
         if reminder_row:
             reminder_row.last_fired_at = datetime.now(timezone.utc)
+            # `once` reminders are single-shot; APScheduler removes the job
+            # after firing. Flip status so list_reminders doesn't show a
+            # zombie 'active' row forever.
+            if reminder_row.schedule_kind == "once":
+                reminder_row.status = "cancelled"
         await db.commit()
 
     # Notify frontend

@@ -13,31 +13,11 @@ from uuid6 import uuid7
 from live150.db.models.reminder import Reminder
 from live150.db.models.user_profile import UserProfile
 from live150.db.session import async_session_factory
-from live150.reminders.jobs import fire_reminder
+from live150.reminders.jobs import fire_reminder, make_trigger
 from live150.reminders.parser import parse_schedule, validate_schedule
 from live150.reminders.scheduler import get_scheduler
 
 logger = logging.getLogger(__name__)
-
-
-def _make_trigger(kind: str, expr: str, tz: str):
-    from apscheduler.triggers.cron import CronTrigger
-    from apscheduler.triggers.date import DateTrigger
-    from apscheduler.triggers.interval import IntervalTrigger
-    from datetime import datetime
-
-    if kind == "once":
-        return DateTrigger(run_date=datetime.fromisoformat(expr), timezone=tz)
-    elif kind == "cron":
-        fields = expr.split()
-        return CronTrigger(
-            minute=fields[0], hour=fields[1], day=fields[2],
-            month=fields[3], day_of_week=fields[4], timezone=tz,
-        )
-    elif kind == "interval":
-        return IntervalTrigger(seconds=int(expr), timezone=tz)
-    else:
-        raise ValueError(f"Unknown schedule kind: {kind}")
 
 
 async def create_reminder(
@@ -93,7 +73,7 @@ async def create_reminder(
         ))
         await db.commit()
 
-    trigger = _make_trigger(schedule.kind, schedule.expr, schedule.timezone)
+    trigger = make_trigger(schedule.kind, schedule.expr, schedule.timezone)
     get_scheduler().add_job(
         fire_reminder,
         trigger=trigger,

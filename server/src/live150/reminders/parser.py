@@ -7,7 +7,7 @@ return schema-valid JSON. Validation via croniter / datetime happens after.
 """
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone as _tz
 from typing import Literal
 
 from croniter import croniter
@@ -17,6 +17,10 @@ from live150.agent.genai_client import get_genai_client
 from live150.agent.model_router import LITE_MODEL
 
 logger = logging.getLogger(__name__)
+
+# APScheduler drops jobs whose next_run_time is older than misfire_grace_time.
+# Keep this in sync with job_defaults in reminders/scheduler.py.
+_MISFIRE_GRACE_SECONDS = 300
 
 
 class ParsedSchedule(BaseModel):
@@ -35,13 +39,23 @@ class ParsedSchedule(BaseModel):
 
 
 def validate_schedule(schedule: ParsedSchedule) -> bool:
-    """Validate a parsed schedule expression."""
+    """Validate a parsed schedule expression.
+
+    For `once`, the datetime must parse AND be far enough in the future that
+    APScheduler won't misfire-drop it. LLMs without a fresh clock tend to
+    hallucinate dates from their training cutoff, so catching past timestamps
+    here turns a silent drop into a surfaced error.
+    """
     if schedule.kind == "once":
         try:
-            datetime.fromisoformat(schedule.expr)
-            return True
+            dt = datetime.fromisoformat(schedule.expr)
         except ValueError:
             return False
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=_tz.utc)
+        now = datetime.now(_tz.utc)
+        # Allow a small grace for clock skew / processing delay.
+        return dt > now - timedelta(seconds=_MISFIRE_GRACE_SECONDS - 30)
     if schedule.kind == "cron":
         try:
             croniter(schedule.expr)
@@ -95,9 +109,12 @@ def _regex_parse(text: str, user_timezone: str) -> ParsedSchedule | None:
 
 _LLM_PROMPT = (
     "Parse the user's natural-language schedule into a structured schedule.\n"
+    "The current moment is: {now_iso} (UTC). Treat this as 'now' when\n"
+    "resolving relative phrases like 'today', 'tomorrow', 'in 2 hours'. Never\n"
+    "emit a datetime earlier than this.\n"
     "Rules:\n"
     "- `once`: any phrase like 'in N seconds/minutes/hours/days', 'tomorrow at 7pm', 'next Monday'. "
-    "Compute the absolute ISO-8601 datetime from now.\n"
+    "Compute the absolute ISO-8601 datetime from the current moment above.\n"
     "- `cron`: recurring patterns like 'every day at 9am', 'every Monday', 'daily at noon'.\n"
     "- `interval`: ONLY when the user explicitly says 'every N minutes/hours/seconds' (repeating indefinitely).\n"
     "IMPORTANT: 'in N seconds' means fire ONCE in N seconds — use `once`, not `interval`.\n"
@@ -109,9 +126,12 @@ _LLM_PROMPT = (
 async def _llm_parse(text: str, user_timezone: str) -> ParsedSchedule:
     """Call Flash-Lite once with a Pydantic response_schema."""
     client = get_genai_client()
+    now_iso = datetime.now(_tz.utc).isoformat()
     resp = await client.aio.models.generate_content(
         model=LITE_MODEL,
-        contents=_LLM_PROMPT.format(user_timezone=user_timezone, text=text),
+        contents=_LLM_PROMPT.format(
+            user_timezone=user_timezone, text=text, now_iso=now_iso,
+        ),
         config={
             "response_mime_type": "application/json",
             "response_schema": ParsedSchedule,

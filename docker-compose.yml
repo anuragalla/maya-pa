@@ -7,7 +7,7 @@ services:
       agent:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      - "8080:3000"
 
   # --- Backend: FastAPI + ADK agent ---
   agent:
@@ -24,8 +24,7 @@ services:
     volumes:
       # Mount source code for auto-reload in dev
       - ./server/src:/app/src
-      # Mount GCP Application Default Credentials so Vertex AI works
-      - ${HOME}/.config/gcloud/application_default_credentials.json:/home/app/.config/gcloud/application_default_credentials.json:ro
+      - /home/anurag/.config/gcloud:/home/app/.config/gcloud:ro
     environment:
       - GOOGLE_APPLICATION_CREDENTIALS=/home/app/.config/gcloud/application_default_credentials.json
     command: ["uvicorn", "live150.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/src"]
@@ -46,7 +45,9 @@ services:
         condition: service_completed_successfully
     env_file: .env
     volumes:
-      - ${HOME}/.config/gcloud/application_default_credentials.json:/home/app/.config/gcloud/application_default_credentials.json:ro
+      # Mount source so scheduler picks up code edits on deploy (matches agent).
+      - ./server/src:/app/src
+      - /home/anurag/.config/gcloud:/home/app/.config/gcloud:ro
     environment:
       - GOOGLE_APPLICATION_CREDENTIALS=/home/app/.config/gcloud/application_default_credentials.json
     command: ["python", "-m", "live150.reminders.run_scheduler"]

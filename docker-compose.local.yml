@@ -1,0 +1,39 @@
+# Local dev overrides for docker-compose.yml
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+# or set COMPOSE_FILE=docker-compose.yml:docker-compose.local.yml
+#
+# Differences vs server:
+#   - web published on host port 3000 (not 8080 behind Caddy)
+#   - agent+scheduler mount the single ADC file under $HOME (not the VM-absolute path)
+#   - loads .env.local on top of .env
+#
+# Note: Compose merges 'volumes' and 'ports' by appending, not replacing.
+# Keep the server volume/port lists minimal enough that appending local
+# paths stays valid (dupes are fine; the container already has the mount).
+
+services:
+  web:
+    # Additive: host :3000 also published alongside the :8080 from base.
+    ports:
+      - "3000:3000"
+
+  agent:
+    env_file:
+      - .env
+      - .env.local
+    volumes:
+      - ${HOME}/.config/gcloud/application_default_credentials.json:/home/app/.config/gcloud/application_default_credentials.json:ro
+
+  scheduler:
+    env_file:
+      - .env
+      - .env.local
+    volumes:
+      - ${HOME}/.config/gcloud/application_default_credentials.json:/home/app/.config/gcloud/application_default_credentials.json:ro
+
+  migrator:
+    env_file:
+      - .env
+      - .env.local

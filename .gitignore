@@ -11,6 +11,9 @@ node_modules/
 .env.local
 CLAUDE.local.md
 
+# Local-only notes (runbooks, scratchpads — not for the repo)
+.local-files/
+
 # IDE
 .DS_Store
 
