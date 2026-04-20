@@ -1,0 +1,137 @@
+name: Deploy Develop (develop)
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-develop-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: develop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.12
+
+      - name: Build web bundle
+        working-directory: web
+        run: |
+          bun install --frozen-lockfile 2>/dev/null || bun install
+          bun run build
+
+      - name: Package release
+        run: |
+          ARCHIVE="maya-pa-${{ github.sha }}.tgz"
+          tar czf "$ARCHIVE" \
+            --exclude='.git' \
+            --exclude='./web/node_modules' \
+            --exclude='./server/.venv' \
+            --exclude='.env.local' \
+            --exclude='docker-compose.local.yml' \
+            --exclude='.local-files' \
+            --exclude='logs' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='.pytest_cache' \
+            .
+
+      - name: Copy archive to VM
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          source: "maya-pa-${{ github.sha }}.tgz"
+          target: "/tmp"
+
+      - name: Deploy on VM
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || '22' }}
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+
+            APP_ROOT="${{ vars.APP_DIR }}"
+            if [ -z "${APP_ROOT}" ]; then
+              echo "APP_DIR environment variable not set"
+              exit 1
+            fi
+
+            if [ ! -d "$APP_ROOT" ]; then
+              echo "APP_ROOT missing: $APP_ROOT (run one-time server migration)"
+              exit 1
+            fi
+
+            if [ ! -f "$APP_ROOT/.env" ]; then
+              echo "Missing env file: $APP_ROOT/.env"
+              exit 1
+            fi
+
+            RELEASES_DIR="$APP_ROOT/releases"
+            RELEASE_DIR="$RELEASES_DIR/${{ github.sha }}"
+            ARCHIVE="/tmp/maya-pa-${{ github.sha }}.tgz"
+
+            sudo mkdir -p "$RELEASES_DIR"
+            sudo chown "$USER":"$USER" "$APP_ROOT" "$RELEASES_DIR"
+            rm -rf "$RELEASE_DIR"
+            mkdir -p "$RELEASE_DIR"
+            tar -xzf "$ARCHIVE" -C "$RELEASE_DIR"
+            rm -f "$ARCHIVE"
+
+            ln -sf "$APP_ROOT/.env" "$RELEASE_DIR/.env"
+
+            cd "$RELEASE_DIR"
+
+            ls -1dt "$RELEASES_DIR"/*/ 2>/dev/null | tail -n +4 | xargs rm -rf || true
+
+            export COMPOSE_PROJECT_NAME="${{ vars.COMPOSE_PROJECT }}"
+            set -a; source "$APP_ROOT/.env"; set +a
+
+            echo "[deploy] Building images (project: $COMPOSE_PROJECT_NAME)"
+            DOCKER_BUILDKIT=1 sudo -E docker compose build --build-arg BUILDKIT_INLINE_CACHE=1
+
+            echo "[deploy] Starting services"
+            sudo -E docker compose up -d --remove-orphans
+
+            sudo docker image prune -f --filter 'until=24h' || true
+            sudo docker builder prune -f --filter 'until=24h' || true
+
+            HEALTHCHECK_URL="${{ vars.HEALTHCHECK_URL }}"
+            ATTEMPTS=45
+            SLEEP_SECONDS=2
+            HEALTH_OK=0
+
+            echo "[deploy] Waiting for $HEALTHCHECK_URL"
+            for i in $(seq 1 "$ATTEMPTS"); do
+              if curl -fsS "$HEALTHCHECK_URL" >/dev/null; then
+                HEALTH_OK=1
+                break
+              fi
+              echo "Healthcheck $i/$ATTEMPTS failed; retry in ${SLEEP_SECONDS}s"
+              sleep "$SLEEP_SECONDS"
+            done
+
+            if [ "$HEALTH_OK" -ne 1 ]; then
+              echo "Healthcheck failed for $HEALTHCHECK_URL"
+              sudo -E docker compose ps || true
+              sudo -E docker compose logs --tail=120 agent || true
+              sudo -E docker compose logs --tail=60 web || true
+              exit 1
+            fi
+
+            ln -sfn "$RELEASE_DIR" "$APP_ROOT/current"
+            echo "[deploy] Success: $RELEASE_DIR"

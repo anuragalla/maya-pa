@@ -7,10 +7,11 @@ services:
       agent:
         condition: service_healthy
     ports:
-      - "8080:3000"
+      - "${WEB_HOST_PORT:-8080}:3000"
     volumes:
-      # Ship pre-built bundles via rsync to avoid on-VM bun+vite builds
-      # (which OOM the small GCP VM). Always overrides the baked /dist.
+      # Ship pre-built bundles to avoid on-VM bun+vite builds. Overrides
+      # the baked /dist so frontend code-only changes ship without an
+      # image rebuild.
       - ./web/dist:/usr/share/nginx/html:ro
 
   # --- Backend: FastAPI + ADK agent ---
@@ -24,7 +25,7 @@ services:
         condition: service_completed_successfully
     env_file: .env
     ports:
-      - "8000:8000"
+      - "${AGENT_HOST_PORT:-8000}:8000"
     volumes:
       # Mount source code for auto-reload in dev
       - ./server/src:/app/src
@@ -68,7 +69,7 @@ services:
       - pgdata:/var/lib/postgresql
       - ./server/docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-extensions.sql:ro
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U live150 -d live150"]
       interval: 10s
