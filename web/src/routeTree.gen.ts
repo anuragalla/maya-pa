@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ThemesRouteImport } from './routes/themes'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OauthSuccessRouteImport } from './routes/oauth.success'
 
 const ThemesRoute = ThemesRouteImport.update({
   id: '/themes',
   path: '/themes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -31,30 +37,34 @@ const OauthSuccessRoute = OauthSuccessRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/themes': typeof ThemesRoute
   '/oauth/success': typeof OauthSuccessRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/themes': typeof ThemesRoute
   '/oauth/success': typeof OauthSuccessRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
   '/themes': typeof ThemesRoute
   '/oauth/success': typeof OauthSuccessRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/themes' | '/oauth/success'
+  fullPaths: '/' | '/login' | '/themes' | '/oauth/success'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/themes' | '/oauth/success'
-  id: '__root__' | '/' | '/themes' | '/oauth/success'
+  to: '/' | '/login' | '/themes' | '/oauth/success'
+  id: '__root__' | '/' | '/login' | '/themes' | '/oauth/success'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LoginRoute: typeof LoginRoute
   ThemesRoute: typeof ThemesRoute
   OauthSuccessRoute: typeof OauthSuccessRoute
 }
@@ -66,6 +76,13 @@ declare module '@tanstack/react-router' {
       path: '/themes'
       fullPath: '/themes'
       preLoaderRoute: typeof ThemesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LoginRoute: LoginRoute,
   ThemesRoute: ThemesRoute,
   OauthSuccessRoute: OauthSuccessRoute,
 }

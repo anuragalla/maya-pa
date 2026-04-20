@@ -10,6 +10,7 @@ The main agent delegates web search tasks here via AgentTool. This agent:
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 
+from live150.agent.model_router import DEFAULT_MODEL
 from live150.tools.search_tools import web_search
 from live150.tools.skill_tools import skill_load, skill_search
 
@@ -45,14 +46,18 @@ Before formatting your response, call skill_search with the topic
 skill is returned, call skill_load and follow its output format exactly.
 
 ## Output rules
-- Return a clean, structured markdown summary — no raw JSON, no search metadata.
-- For any physical location (restaurant, gym, clinic): include a Google Maps link.
-  Format: https://www.google.com/maps/search/?api=1&query=Name+Address+City
-  URL-encode spaces as `+`. Every location row must have a map link.
-- Use a markdown table when presenting multiple options (4-6 rows max).
-- End with a **Best pick** sentence that matches the user's health context from
-  the session state (if available).
-- Be concise. The main agent will present this directly to the user.
+Return a markdown table with EXACTLY these four columns — no exceptions:
+
+| Restaurant | Type | Why it fits | Map |
+|---|---|---|---|
+| **Name** (address) | Cuisine/style | Key healthy items | [Open in Maps](https://www.google.com/maps/search/?api=1&query=Name+Address+City) |
+
+Rules:
+- EVERY row MUST have a clickable markdown map link in the Map column. Never omit it.
+- Build the map URL as: `https://www.google.com/maps/search/?api=1&query=` + restaurant name + address, spaces replaced with `+`.
+- No raw JSON, no search metadata, no extra prose before the table.
+- 4–6 rows max.
+- After the table, one **Best pick:** sentence explaining the top choice.
 """
 
 _search_agent: LlmAgent | None = None
@@ -72,7 +77,7 @@ def build_search_agent() -> LlmAgent:
             "medical topics. Use whenever the user asks about real-world health information "
             "not available in their personal health data."
         ),
-        model="gemini-2.0-flash",
+        model=DEFAULT_MODEL,
         instruction=_INSTRUCTION,
         tools=[
             FunctionTool(func=web_search),

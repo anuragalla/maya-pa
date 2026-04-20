@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     # Crypto
     master_key: str = ""  # base64-encoded 32-byte key
 
+    # Gate auth (static credentials for public access control)
+    gate_username: str = ""
+    gate_password: str = ""
+    gate_jwt_secret: str = "change-me-in-prod"
+
     # Misc
     profile_ttl_minutes: int = 60
     rate_limit_chat_per_5min: int = 60

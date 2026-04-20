@@ -47,3 +47,12 @@ Test users: Nigel (+19084329987), Murthy (+19083612019), Pragya (+12243347204)
 ```bash
 cd server && PYTHONPATH=src .venv/bin/pytest tests/unit -q
 ```
+- update `docs/test/agent-browser-tests.md` whenever a feature changes or think that an end test is required
+
+## Plan mode
+- Make the plan concise
+- At the end of the plan, give me a list of unresolved questions to answer if any
+
+## Frontend Rules (`apps/web`)
+- Never use `any` — define types / zod schemas
+- Prefer components around 150 lines. if a component exceeds that, evaluate whether it contains distinct concerns(Data fetching, sub ui sections, reusable logic) and split at those natural boundaries. Always extract stateful logic into custom hooks. Never split purely to meet a line count

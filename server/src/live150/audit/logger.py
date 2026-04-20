@@ -21,6 +21,8 @@ async def write_audit(
     latency_ms: int | None = None,
     tokens_in: int | None = None,
     tokens_out: int | None = None,
+    cached_tokens: int | None = None,
+    thoughts_tokens: int | None = None,
 ) -> None:
     """Append a row to the audit log."""
     row = AuditLog(
@@ -32,6 +34,8 @@ async def write_audit(
         latency_ms=latency_ms,
         tokens_in=tokens_in,
         tokens_out=tokens_out,
+        cached_tokens=cached_tokens,
+        thoughts_tokens=thoughts_tokens,
     )
     db.add(row)
     await db.flush()
