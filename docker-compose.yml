@@ -8,6 +8,10 @@ services:
         condition: service_healthy
     ports:
       - "8080:3000"
+    volumes:
+      # Ship pre-built bundles via rsync to avoid on-VM bun+vite builds
+      # (which OOM the small GCP VM). Always overrides the baked /dist.
+      - ./web/dist:/usr/share/nginx/html:ro
 
   # --- Backend: FastAPI + ADK agent ---
   agent:

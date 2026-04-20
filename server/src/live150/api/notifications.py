@@ -1,68 +1,87 @@
-"""Notification endpoints — self-hosted stand-in for Live150 notify API.
+"""Notification endpoints — durable, DB-backed.
 
-POST /api/notifications/push  — receives notifications from fire_reminder via NotifyClient
-GET  /api/notifications       — frontend polls for pending notifications per user
+POST /api/notifications/push  — receives a push from fire_reminder. No-op for
+                                 chat-linked payloads (the chat_message row
+                                 is the source of truth); returns 200 so the
+                                 scheduler's NotifyClient is happy.
+GET  /api/notifications        — returns reminder chat_messages created in
+                                 the lookback window. Frontend dedupes by
+                                 message_id so repeated polls are safe.
 
-When the real Live150 notify API is ready, change LIVE150_NOTIFY_URL in .env
-and this file becomes dead code. Zero changes to fire_reminder or NotifyClient.
+The previous in-memory store was lost on every agent recreate and on the
+5-minute TTL prune — users only saw reminders on full-page refresh (which
+reloads chat history from the DB). The DB-backed model survives restarts
+and tab-throttling, which is what users actually need.
 """
 
 import logging
-import time
-from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, Depends, Header, Request
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from live150.db.models.chat_message import ChatMessage
+from live150.db.session import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["notifications"])
 
-# In-memory store: phone -> list of {payload, timestamp}
-_notifications: dict[str, list[dict]] = defaultdict(list)
-
-# Auto-expire after 5 minutes
-_TTL_SECONDS = 300
-
-
-def _prune(phone: str) -> None:
-    cutoff = time.time() - _TTL_SECONDS
-    _notifications[phone] = [n for n in _notifications[phone] if n["ts"] > cutoff]
+# How far back to look for un-acknowledged reminder messages. Long enough to
+# cover a tab being backgrounded, short enough that old reminders don't
+# replay when a user logs in fresh.
+_LOOKBACK = timedelta(minutes=15)
 
 
 @router.post("/push")
 async def push_notification(request: Request):
-    """Receive a notification from NotifyClient (fire_reminder).
+    """Accepted for backward-compat with the scheduler's NotifyClient.
 
-    Expects the same payload shape NotifyClient sends:
-    { "user_id": "+19084329987", "type": "reminder", "title": "...", "body": "..." }
+    fire_reminder already writes the reminder as a chat_message before
+    calling here, so this endpoint is effectively a receipt.
     """
     body = await request.json()
-    user_id = body.get("user_id", "")
-    if not user_id:
-        return {"status": "ignored", "reason": "no user_id"}
-
-    _notifications[user_id].append({
-        "payload": body,
-        "ts": time.time(),
-    })
-    _prune(user_id)
-
-    logger.info("Notification stored", extra={"user_id": user_id, "type": body.get("type")})
+    logger.info(
+        "Notification received",
+        extra={"user_id": body.get("user_id"), "type": body.get("type")},
+    )
     return {"status": "ok"}
 
 
 @router.get("")
-async def poll_notifications(x_phone_number: str = Header("")):
-    """Frontend polls this to check for pending notifications.
+async def poll_notifications(
+    x_phone_number: str = Header(""),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return recent reminder chat_messages for the user.
 
-    Returns and clears all pending notifications for the user.
+    Frontend dedupes by message_id, so returning the same row across polls
+    is safe — it just won't re-inject the message.
     """
     phone = x_phone_number.strip()
     if not phone:
         return {"notifications": []}
 
-    _prune(phone)
-    pending = _notifications.pop(phone, [])
+    cutoff = datetime.now(timezone.utc) - _LOOKBACK
+    stmt = (
+        select(ChatMessage)
+        .where(
+            ChatMessage.user_id == phone,
+            ChatMessage.turn_context == "reminder",
+            ChatMessage.created_at >= cutoff,
+        )
+        .order_by(ChatMessage.created_at.asc())
+    )
+    rows = (await db.execute(stmt)).scalars().all()
 
     return {
-        "notifications": [n["payload"] for n in pending]
+        "notifications": [
+            {
+                "type": "reminder",
+                "message_id": str(r.message_id),
+                "body": r.content if isinstance(r.content, str) else str(r.content),
+                "title": "Reminder",
+            }
+            for r in rows
+        ]
     }

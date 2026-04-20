@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Conversation,
   ConversationContent,
+  ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import {
   PromptInput,
@@ -34,30 +35,7 @@ interface ChatViewProps {
 }
 
 export function ChatView({ phone, userName }: ChatViewProps) {
-  const [initialMessages, setInitialMessages] = useState<Message[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
-
-  // Load chat history on mount
-  useEffect(() => {
-    if (!phone) return;
-    fetch("/api/v1/stream/history", {
-      headers: { "X-Phone-Number": phone },
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.messages?.length) {
-          const mapped: Message[] = data.messages.map((m: any) => ({
-            id: m.id,
-            role: m.role === "model" ? "assistant" : m.role,
-            content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
-            createdAt: m.createdAt ? new Date(m.createdAt) : undefined,
-          }));
-          setInitialMessages(mapped);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setHistoryLoaded(true));
-  }, [phone]);
 
   const {
     messages,
@@ -72,8 +50,34 @@ export function ChatView({ phone, userName }: ChatViewProps) {
   } = useChat({
     api: "/api/v1/stream/chat",
     headers: { "X-Phone-Number": phone },
-    initialMessages,
   });
+
+  // Load chat history on mount / phone change. useChat only reads
+  // initialMessages once at init — which happens before this async fetch
+  // resolves — so we push into the live messages array via setMessages.
+  useEffect(() => {
+    if (!phone) return;
+    setHistoryLoaded(false);
+    fetch("/api/v1/stream/history", {
+      headers: { "X-Phone-Number": phone },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.messages?.length) {
+          const mapped: Message[] = data.messages.map((m: any) => ({
+            id: m.id,
+            role: m.role === "model" ? "assistant" : m.role,
+            content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+            createdAt: m.createdAt ? new Date(m.createdAt) : undefined,
+          }));
+          setMessages(mapped);
+        } else {
+          setMessages([]);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setHistoryLoaded(true));
+  }, [phone, setMessages]);
 
   const injectReminderMessage = useCallback((n: Notification) => {
     if (!n.message_id || !n.body) return;
@@ -122,9 +126,9 @@ export function ChatView({ phone, userName }: ChatViewProps) {
             {messages.map((message: any, idx: number) => (
               <motion.div
                 key={message.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, ease: "easeOut" }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
               >
                 <ChatMessageItem
                   message={message}
@@ -147,6 +151,7 @@ export function ChatView({ phone, userName }: ChatViewProps) {
             </motion.div>
           )}
         </ConversationContent>
+        <ConversationScrollButton />
       </Conversation>
 
       {/* Notifications */}
