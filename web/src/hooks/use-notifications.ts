@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { readSseFrames } from "@/lib/sse";
 
 export interface Notification {
   type: string;
@@ -9,19 +11,27 @@ export interface Notification {
   user_id?: string;
 }
 
-const POLL_INTERVAL = 5000; // 5 seconds
-
+/**
+ * Live reminder feed. One-shot catchup fetch on mount (for reminders that
+ * fired while the tab was closed), then an SSE stream for real-time delivery.
+ */
 export function useNotifications(
   phone: string,
   onInjectMessage?: (n: Notification) => void,
 ) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onInjectRef = useRef(onInjectMessage);
   onInjectRef.current = onInjectMessage;
-  // Tracks message_ids the user has explicitly dismissed so re-polls don't
-  // resurrect them (the endpoint is idempotent within its lookback window).
   const dismissedRef = useRef<Set<string>>(new Set());
+  const seenRef = useRef<Set<string>>(new Set());
+
+  const ingestOne = useCallback((n: Notification) => {
+    if (!n.message_id || dismissedRef.current.has(n.message_id)) return;
+    if (seenRef.current.has(n.message_id)) return;
+    seenRef.current.add(n.message_id);
+    setNotifications((prev) => [...prev, n]);
+    if (n.body) onInjectRef.current?.(n);
+  }, []);
 
   const dismiss = useCallback((index: number) => {
     setNotifications((prev) => {
@@ -32,66 +42,50 @@ export function useNotifications(
   }, []);
 
   useEffect(() => {
-    if (!phone) return;
+    setNotifications([]);
+    dismissedRef.current = new Set();
+    seenRef.current = new Set();
+  }, [phone]);
 
-    const poll = async () => {
+  useEffect(() => {
+    if (!phone) return;
+    const controller = new AbortController();
+
+    const run = async () => {
       try {
-        const res = await fetch("/api/v1/notifications", {
+        const res = await fetch("/api/v1/notifications/catchup", {
           headers: { "X-Phone-Number": phone },
+          signal: controller.signal,
         });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.notifications?.length > 0) {
-          // Dedupe by message_id — the endpoint is idempotent (returns the
-          // same rows across polls within the 15-min lookback), so without
-          // dedup every poll stacks another banner.
-          setNotifications((prev) => {
-            const seen = new Set(prev.map((n) => n.message_id).filter(Boolean));
-            const fresh = data.notifications.filter(
-              (n: Notification) =>
-                n.message_id &&
-                !seen.has(n.message_id) &&
-                !dismissedRef.current.has(n.message_id),
-            );
-            return fresh.length ? [...prev, ...fresh] : prev;
-          });
-          // Chat injection already dedupes by message_id inside the callback.
-          data.notifications.forEach((n: Notification) => {
-            if (n.message_id && n.body && onInjectRef.current) {
-              onInjectRef.current(n);
-            }
-          });
+        if (res.ok) {
+          const data = (await res.json()) as { notifications?: Notification[] };
+          for (const n of data.notifications ?? []) ingestOne(n);
         }
       } catch {
-        // Silently ignore poll failures
+        // Ignore — SSE will still connect.
+      }
+
+      try {
+        const res = await fetch("/api/v1/notifications/events", {
+          headers: { "X-Phone-Number": phone, Accept: "text/event-stream" },
+          signal: controller.signal,
+        });
+        for await (const frame of readSseFrames(res, controller.signal)) {
+          if (frame.event !== "notification") continue;
+          try {
+            ingestOne(JSON.parse(frame.data) as Notification);
+          } catch {
+            // drop malformed frame
+          }
+        }
+      } catch {
+        // Aborted or transport error — component unmount or user switch.
       }
     };
 
-    poll();
-    intervalRef.current = setInterval(poll, POLL_INTERVAL);
-
-    // Chrome throttles setInterval to 1/min in backgrounded tabs, so
-    // reminders that fire while the tab is idle can be missed entirely
-    // (notification TTL is 5 min server-side). Catch up the moment the
-    // tab is foregrounded again.
-    const onVisible = () => {
-      if (document.visibilityState === "visible") poll();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onVisible);
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onVisible);
-    };
-  }, [phone]);
-
-  // Clear on user switch
-  useEffect(() => {
-    setNotifications([]);
-    dismissedRef.current = new Set();
-  }, [phone]);
+    void run();
+    return () => controller.abort();
+  }, [phone, ingestOne]);
 
   return { notifications, dismiss };
 }

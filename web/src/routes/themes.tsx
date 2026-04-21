@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 // Font imports
 import "@fontsource-variable/plus-jakarta-sans";
@@ -551,26 +552,28 @@ function ThemePreview() {
           <div className="flex gap-3">
             {/* Dark/Light toggle */}
             <div className="flex overflow-hidden rounded-lg border border-neutral-700">
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => setMode("dark")}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                className={`rounded-none px-4 py-2 ${
                   mode === "dark"
-                    ? "bg-white text-black"
-                    : "bg-transparent text-neutral-400 hover:text-white"
+                    ? "bg-white text-black hover:bg-white hover:text-black"
+                    : "bg-transparent text-neutral-400 hover:bg-transparent hover:text-white"
                 }`}
               >
                 Dark
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={() => setMode("light")}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                className={`rounded-none px-4 py-2 ${
                   mode === "light"
-                    ? "bg-white text-black"
-                    : "bg-transparent text-neutral-400 hover:text-white"
+                    ? "bg-white text-black hover:bg-white hover:text-black"
+                    : "bg-transparent text-neutral-400 hover:bg-transparent hover:text-white"
                 }`}
               >
                 Light
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -578,13 +581,14 @@ function ThemePreview() {
         {/* Font switcher */}
         <div className="mb-8 flex flex-wrap gap-2">
           {fontCombos.map((fc, i) => (
-            <button
+            <Button
               key={fc.name}
+              variant="outline"
               onClick={() => setFontIdx(i)}
-              className={`rounded-lg border px-3 py-2 text-left transition-all ${
+              className={`h-auto flex-col items-start gap-0 px-3 py-2 text-left ${
                 i === fontIdx
-                  ? "border-white bg-neutral-800"
-                  : "border-neutral-700 hover:border-neutral-500"
+                  ? "border-white bg-neutral-800 hover:bg-neutral-800"
+                  : "border-neutral-700 bg-transparent hover:border-neutral-500 hover:bg-transparent"
               }`}
             >
               <div
@@ -594,7 +598,7 @@ function ThemePreview() {
                 {fc.name}
               </div>
               <div className="text-xs text-neutral-400">{fc.description}</div>
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -602,17 +606,18 @@ function ThemePreview() {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
           {(Object.entries(palettes) as [PaletteKey, Palette][]).map(
             ([key, palette]) => (
-              <button
+              <Button
                 key={key}
+                variant="ghost"
                 onClick={() => setSelected(selected === key ? null : key)}
-                className={`rounded-lg border-2 text-left transition-all ${
+                className={`h-auto flex-col items-stretch border-2 bg-transparent p-0 text-left hover:bg-transparent ${
                   selected === key
                     ? "border-white"
                     : "border-transparent hover:border-neutral-700"
                 }`}
               >
                 <ThemeCard palette={palette} mode={mode} font={font} />
-              </button>
+              </Button>
             )
           )}
         </div>

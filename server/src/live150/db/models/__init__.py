@@ -3,6 +3,7 @@ from live150.db.models.calendar_snapshot import CalendarSnapshot
 from live150.db.models.chat_message import ChatMessage
 from live150.db.models.chat_session import ChatSession
 from live150.db.models.connect_state import ConnectState
+from live150.db.models.document import Document
 from live150.db.models.memory import MemoryEntry
 from live150.db.models.oauth_token import OAuthToken
 from live150.db.models.pending_confirmation import PendingConfirmation
@@ -17,6 +18,7 @@ __all__ = [
     "ChatMessage",
     "ChatSession",
     "ConnectState",
+    "Document",
     "MemoryEntry",
     "OAuthToken",
     "PendingConfirmation",

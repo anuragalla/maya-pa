@@ -5,7 +5,9 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
+import { DocCard } from "@/components/documents/doc-card";
 import { ThinkingBlock } from "@/components/thinking-block";
+import type { MessageDocAttachment } from "@/lib/documents";
 import { formatTimestamp } from "@/lib/utils";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import { useState } from "react";
@@ -79,9 +81,20 @@ function extractToolInfo(part: any, index: number): ToolCallInfo {
   };
 }
 
-export function ChatMessageItem({ message, isStreaming }: { message: any; isStreaming: boolean }) {
+export function ChatMessageItem({
+  message,
+  isStreaming,
+  phone,
+}: {
+  message: any;
+  isStreaming: boolean;
+  phone: string;
+}) {
   const [copied, setCopied] = useState(false);
   const parts: any[] = message.parts ?? [];
+  const attachments: MessageDocAttachment[] = Array.isArray(message.documents)
+    ? message.documents
+    : [];
   const textParts = parts.filter((p: any) => p.type === "text" && p.text?.trim());
   const toolParts = parts.filter((p: any) => isToolPart(p) || p.type === "tool-invocation");
 
@@ -114,6 +127,20 @@ export function ChatMessageItem({ message, isStreaming }: { message: any; isStre
   return (
     <Message from={message.role}>
       <MessageContent>
+        {attachments.length > 0 && (
+          <div className="mb-2 flex flex-col gap-2">
+            {attachments.map((doc) => (
+              <DocCard
+                key={doc.document_id}
+                documentId={doc.document_id}
+                phone={phone}
+                filename={doc.original_filename}
+                docType={doc.doc_type}
+                status={doc.status}
+              />
+            ))}
+          </div>
+        )}
         {showThinking && (
           <ThinkingBlock
             toolCalls={toolCalls}

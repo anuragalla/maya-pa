@@ -3,6 +3,7 @@
 from google.adk.tools import FunctionTool
 from google.adk.tools.agent_tool import AgentTool
 
+from live150.agent.doc_agent import build_doc_agent
 from live150.agent.search_agent import build_search_agent
 from live150.tools.calendar_tools import (
     check_calendar_connection,
@@ -22,6 +23,7 @@ from live150.tools.integration_tools import (
     list_available_integrations,
     request_integration_connect,
 )
+from live150.tools.document_tools import get_document, list_documents
 from live150.tools.memory_tools import save_memory, search_memory
 from live150.tools.nams_tools import log_nams
 from live150.tools.reminder_tools import cancel_reminder, create_reminder, list_reminders
@@ -41,6 +43,8 @@ REMINDER_SAFE_TOOLS = {
     "check_calendar_connection",
     "find_free_slots",
     "list_available_integrations",
+    "list_documents",
+    "get_document",
 }
 
 
@@ -74,7 +78,12 @@ def build_tool_registry() -> list[FunctionTool]:
         # Integrations
         FunctionTool(func=list_available_integrations),
         FunctionTool(func=request_integration_connect),
+        # Documents
+        FunctionTool(func=list_documents),
+        FunctionTool(func=get_document),
         # Health web search (sub-agent)
         AgentTool(agent=build_search_agent()),
+        # Document analyst (sub-agent, Gemini 3.1 Pro)
+        AgentTool(agent=build_doc_agent()),
     ]
     return tools

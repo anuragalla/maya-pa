@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Shimmer } from "@/components/ai-elements/shimmer";
+import { Button } from "@/components/ui/button";
 import type { ToolCallInfo } from "@/components/chat-message-item";
 
 interface ThinkingBlockProps {
@@ -28,9 +29,11 @@ export function ThinkingBlock({ toolCalls, isStreaming, isDone }: ThinkingBlockP
   return (
     <div className="mb-2">
       {/* Trigger row */}
-      <button
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left text-sm transition-colors hover:bg-card"
+        className="w-full justify-start gap-2 px-1 py-1.5 text-left text-sm hover:bg-card"
       >
         {isStreaming ? (
           <Loader2Icon className="size-4 animate-spin text-accent" />
@@ -60,7 +63,7 @@ export function ThinkingBlock({ toolCalls, isStreaming, isDone }: ThinkingBlockP
             )}
           />
         )}
-      </button>
+      </Button>
 
       {/* Expanded tool list */}
       {isOpen && totalCount > 0 && (
@@ -83,12 +86,14 @@ function ToolCallRow({ tool }: { tool: ToolCallInfo }) {
 
   return (
     <div>
-      <button
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={() => hasOutput && setShowResult(!showResult)}
         className={cn(
-          "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
-          hasOutput && "cursor-pointer hover:bg-background",
-          !hasOutput && "cursor-default"
+          "w-full justify-start gap-2 px-2 py-1.5 text-left text-xs",
+          hasOutput && "hover:bg-background",
+          !hasOutput && "cursor-default hover:bg-transparent"
         )}
       >
         {/* Status icon */}
@@ -126,7 +131,7 @@ function ToolCallRow({ tool }: { tool: ToolCallInfo }) {
             )}
           />
         )}
-      </button>
+      </Button>
 
       {/* Result (collapsed by default) */}
       {showResult && hasOutput && (

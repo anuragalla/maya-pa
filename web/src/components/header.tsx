@@ -1,4 +1,5 @@
 import { MoonIcon, SunIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -33,9 +34,11 @@ export function Header({ users, selectedPhone, onUserChange }: HeaderProps) {
         </span>
       </div>
       <div className="flex items-center gap-2">
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={toggle}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+          className="text-muted-foreground hover:bg-card"
           aria-label="Toggle theme"
         >
           {theme === "dark" ? (
@@ -43,7 +46,7 @@ export function Header({ users, selectedPhone, onUserChange }: HeaderProps) {
           ) : (
             <MoonIcon className="size-4" />
           )}
-        </button>
+        </Button>
         <Select
           value={selectedPhone}
           onValueChange={(val) => val && onUserChange(val)}

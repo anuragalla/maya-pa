@@ -118,6 +118,7 @@ from live150.api.oauth import router as oauth_router  # noqa: E402
 from live150.api.reminders import router as reminders_router  # noqa: E402
 from live150.api.confirmations import router as confirmations_router  # noqa: E402
 from live150.api.notifications import router as notifications_router  # noqa: E402
+from live150.api.documents import router as documents_router  # noqa: E402
 api_v1 = APIRouter(prefix="/api/v1")
 api_v1.include_router(auth_router, prefix="/auth")
 api_v1.include_router(chat_router, prefix="/chat")
@@ -126,4 +127,5 @@ api_v1.include_router(oauth_router, prefix="/oauth")
 api_v1.include_router(reminders_router, prefix="/reminders")
 api_v1.include_router(confirmations_router, prefix="/confirmations")
 api_v1.include_router(notifications_router, prefix="/notifications")
+api_v1.include_router(documents_router, prefix="/documents")
 app.include_router(api_v1)

@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 from uuid6 import uuid7
 
 from live150.agent.builder import build_agent
@@ -30,6 +31,7 @@ from live150.agent.runner import Live150Runner
 from live150.auth.middleware import AuthedUser, require_user
 from live150.db.models.chat_message import ChatMessage
 from live150.db.models.chat_session import ChatSession
+from live150.db.models.document import Document
 from live150.db.session import async_session_factory, get_db
 from live150.live150_client import get_client
 
@@ -90,6 +92,34 @@ async def get_history(
     )
     rows = (await db.execute(stmt)).scalars().all()
 
+    message_ids = [m.message_id for m in rows]
+    docs_by_msg: dict[uuid.UUID, list[dict]] = {}
+    if message_ids:
+        try:
+            doc_stmt = (
+                select(Document)
+                .options(defer(Document.extracted_text))
+                .where(
+                    Document.user_id == phone,
+                    Document.chat_message_id.in_(message_ids),
+                )
+            )
+            doc_rows = (await db.execute(doc_stmt)).scalars().all()
+            for d in doc_rows:
+                if d.chat_message_id is None:
+                    continue
+                docs_by_msg.setdefault(d.chat_message_id, []).append(
+                    {
+                        "document_id": str(d.document_id),
+                        "original_filename": d.original_filename,
+                        "doc_type": d.doc_type,
+                        "status": d.status,
+                        "summary_detailed": d.summary_detailed,
+                    }
+                )
+        except Exception:
+            logger.warning("history doc-join failed", exc_info=True)
+
     messages = []
     for m in rows:
         content = m.content
@@ -100,6 +130,9 @@ async def get_history(
             msg = {"id": str(m.message_id), "role": m.role, **content, "createdAt": created_at}
         else:
             msg = {"id": str(m.message_id), "role": m.role, "content": str(content), "createdAt": created_at}
+        attached = docs_by_msg.get(m.message_id)
+        if attached:
+            msg["documents"] = attached
         messages.append(msg)
 
     return {"messages": messages}
@@ -110,6 +143,15 @@ async def stream_chat(request: Request):
     """Vercel AI SDK compatible streaming chat endpoint."""
     body = await request.json()
     messages = body.get("messages", [])
+    raw_documents = body.get("documents") or []
+    document_ids: list[uuid.UUID] = []
+    for d in raw_documents:
+        if not isinstance(d, str):
+            continue
+        try:
+            document_ids.append(uuid.UUID(d))
+        except ValueError:
+            continue
     phone = request.headers.get("x-phone-number", "")
 
     if not phone:
@@ -154,9 +196,38 @@ async def stream_chat(request: Request):
 
     # Persist the user message
     user_msg_content = last_msg["content"]
+
+    user_message_id = uuid7()
     async with async_session_factory() as db:
+        attached_docs: list[Document] = []
+        if document_ids:
+            attached_docs = list(
+                (
+                    await db.execute(
+                        select(Document)
+                        .options(defer(Document.extracted_text))
+                        .where(
+                            Document.user_id == phone,
+                            Document.document_id.in_(document_ids),
+                        )
+                    )
+                ).scalars().all()
+            )
+            for d in attached_docs:
+                d.chat_message_id = user_message_id
+
+        if attached_docs:
+            lines = ["[Attached documents:"]
+            for d in attached_docs:
+                lines.append(
+                    f"- {d.original_filename} (status={d.status}, doc_type={d.doc_type}, "
+                    f"id={d.document_id}) — use get_document(id) to inspect"
+                )
+            lines.append("]")
+            user_msg_content = "\n".join(lines) + f"\n\n{user_msg_content}"
+
         db.add(ChatMessage(
-            message_id=uuid7(),
+            message_id=user_message_id,
             session_id=session_id,
             user_id=phone,
             role="user",

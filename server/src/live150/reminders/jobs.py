@@ -147,11 +147,12 @@ async def _fire_reminder_async(reminder_id: str) -> None:
                 reminder_row.status = "cancelled"
         await db.commit()
 
-    # Notify frontend
+    # Push to any open SSE connection for this user.
     try:
-        await _notify_client.send(
-            user_id=user_id,
-            payload={
+        from live150.reminders.events import publish_notification
+        await publish_notification(
+            user_id,
+            {
                 "type": "reminder",
                 "reminder_id": reminder_id,
                 "title": title,

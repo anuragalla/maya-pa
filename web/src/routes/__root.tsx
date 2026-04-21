@@ -1,5 +1,6 @@
 import { createRootRoute, Outlet, useNavigate, useLocation } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/hooks/use-theme";
 
@@ -22,6 +23,7 @@ function RootLayout() {
     <ThemeProvider>
       <TooltipProvider>
         <Outlet />
+        <Toaster position="top-center" />
       </TooltipProvider>
     </ThemeProvider>
   );
