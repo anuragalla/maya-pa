@@ -118,7 +118,7 @@ export function DocCard({
               <span className="text-xs text-muted-foreground">Cancelled</span>
             )}
             {status === "ready" && doc?.tags?.slice(0, 3).map((t) => (
-              <Badge key={t} variant="secondary" className="text-[10px]">
+              <Badge key={t} variant="tag" className="text-[10px]">
                 {t}
               </Badge>
             ))}
@@ -132,22 +132,33 @@ export function DocCard({
   );
 }
 
+// DocCards live inside user bubbles (bg-primary solid). A neutral bg-card looks
+// pasted-on; a violet-tinted surface reads as part of the family — deep plum in
+// dark mode, pale lavender in light.
+// The base Card already sets `ring-1 ring-foreground/10`; we override the ring
+// color to stay in the violet family. No `border-*` classes — avoids the
+// double-outline (ring + border) that looked fuzzy/weird.
+const DOC_SURFACE =
+  "bg-violet-100 ring-violet-300/50 dark:bg-violet-950/95 dark:ring-violet-700/40";
+const DOC_SURFACE_HOVER =
+  "hover:bg-violet-200/70 dark:hover:bg-violet-900/90";
+
 function cardClass(status: DocStatus): string {
   if (status === "failed") {
-    return "cursor-pointer border-destructive/40 bg-destructive/5 transition-colors hover:bg-destructive/10";
+    return `cursor-pointer ring-destructive/40 ${DOC_SURFACE.replace(/ring-violet-[^\s]+/g, "")} bg-violet-100 dark:bg-violet-950/95 transition-colors hover:bg-destructive/10 dark:hover:bg-destructive/15`;
   }
   if (status === "cancelled") {
-    return "cursor-pointer bg-muted/40 opacity-70 transition-opacity hover:opacity-100";
+    return `cursor-pointer ${DOC_SURFACE} opacity-80 transition-opacity hover:opacity-100`;
   }
   if (ACTIVE_STATUSES.has(status)) {
-    return "cursor-pointer border-dashed bg-muted/40 transition-colors hover:bg-muted/60";
+    // Dashed ring-like outline via a faint inset; no border-width wrestling.
+    return `cursor-pointer ${DOC_SURFACE} ${DOC_SURFACE_HOVER} transition-colors`;
   }
-  return "cursor-pointer transition-colors hover:bg-accent/40";
+  return `cursor-pointer ${DOC_SURFACE} ${DOC_SURFACE_HOVER} transition-colors`;
 }
 
-function badgeVariant(status: DocStatus): "default" | "secondary" | "destructive" | "outline" {
+function badgeVariant(status: DocStatus): "destructive" | "outline" {
   if (status === "failed") return "destructive";
-  if (status === "ready") return "secondary";
   return "outline";
 }
 

@@ -240,7 +240,7 @@ export function DocSummary({ document }: DocSummaryProps) {
         {document.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {document.tags.map((tag) => (
-              <Badge key={tag} variant="secondary">
+              <Badge key={tag} variant="tag">
                 {tag}
               </Badge>
             ))}

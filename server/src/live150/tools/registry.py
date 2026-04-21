@@ -3,7 +3,6 @@
 from google.adk.tools import FunctionTool
 from google.adk.tools.agent_tool import AgentTool
 
-from live150.agent.doc_agent import build_doc_agent
 from live150.agent.search_agent import build_search_agent
 from live150.tools.calendar_tools import (
     check_calendar_connection,
@@ -78,12 +77,13 @@ def build_tool_registry() -> list[FunctionTool]:
         # Integrations
         FunctionTool(func=list_available_integrations),
         FunctionTool(func=request_integration_connect),
-        # Documents
+        # Documents — read only. doc_analyst runs in the background processor;
+        # by the time the main agent runs, get_document returns the processed
+        # summary/markers/tags. Exposing doc_analyst here caused the main agent
+        # to re-analyze without the file and reply "can't read it".
         FunctionTool(func=list_documents),
         FunctionTool(func=get_document),
         # Health web search (sub-agent)
         AgentTool(agent=build_search_agent()),
-        # Document analyst (sub-agent, Gemini 3.1 Pro)
-        AgentTool(agent=build_doc_agent()),
     ]
     return tools

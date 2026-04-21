@@ -32,6 +32,9 @@ const TOOL_TITLES: Record<string, string> = {
   check_calendar_connection: "Calendar Status",
   list_available_integrations: "Integrations",
   request_integration_connect: "Connect Integration",
+  list_documents: "List Documents",
+  get_document: "Get Document",
+  doc_analyst: "Analyze Document",
 };
 
 function isToolPart(part: any): boolean {

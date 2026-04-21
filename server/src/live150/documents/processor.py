@@ -11,9 +11,9 @@ import json
 import logging
 import re
 import uuid
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from live150.db.models.document import Document
 from live150.db.session import async_session_factory
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 _APP_NAME = "live150-doc"
 _MAX_ERROR_LEN = 500
 _CODE_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.IGNORECASE | re.MULTILINE)
+_STALE_PROCESSING_MINUTES = 10
 
 
 def _strip_code_fences(text: str) -> str:
@@ -31,6 +32,35 @@ def _strip_code_fences(text: str) -> str:
         # Drop leading fence (optionally with ```json) and trailing fence.
         stripped = _CODE_FENCE_RE.sub("", stripped).strip()
     return stripped
+
+
+async def sweep_stale_processing() -> int:
+    """Mark docs in `uploaded`/`processing` older than the staleness window as
+    `failed` on scheduler startup. Covers jobs killed mid-flight by container
+    restarts, crashes, or lost APScheduler jobs. Returns number of rows swept.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=_STALE_PROCESSING_MINUTES)
+    async with async_session_factory() as db:
+        result = await db.execute(
+            update(Document)
+            .where(
+                Document.status.in_(("uploaded", "processing")),
+                Document.uploaded_at < cutoff,
+            )
+            .values(
+                status="failed",
+                error_message="Processing interrupted — scheduler restart or crash",
+            )
+            .returning(Document.document_id)
+        )
+        swept = [row[0] for row in result.all()]
+        await db.commit()
+    if swept:
+        logger.warning(
+            "doc_sweep_stale_marked_failed",
+            extra={"count": len(swept), "document_ids": [str(d) for d in swept]},
+        )
+    return len(swept)
 
 
 def _row_to_dict_for_event(document: Document) -> dict:

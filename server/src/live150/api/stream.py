@@ -14,6 +14,7 @@ Buffering: text is held until all pending tool calls resolve.
 Tool call pills stream immediately so the UI shows progress.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -29,11 +30,17 @@ from uuid6 import uuid7
 from live150.agent.builder import build_agent
 from live150.agent.runner import Live150Runner
 from live150.auth.middleware import AuthedUser, require_user
+from live150.db import pg_pubsub
 from live150.db.models.chat_message import ChatMessage
 from live150.db.models.chat_session import ChatSession
 from live150.db.models.document import Document
 from live150.db.session import async_session_factory, get_db
 from live150.live150_client import get_client
+
+_TERMINAL_DOC_STATUSES = {"ready", "failed", "cancelled"}
+# Processing can take 2-3 minutes when concurrent jobs share Gemini 3.1 Pro.
+# Give plenty of headroom; the client still sees DocCard SSE progress the whole time.
+_DOC_WAIT_TIMEOUT_S = 300.0
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["stream"])
@@ -42,6 +49,103 @@ _SUGGEST_OPEN = "<suggestions>"
 _SUGGEST_CLOSE = "</suggestions>"
 
 _runner: Live150Runner | None = None
+
+
+async def _wait_for_docs_terminal(
+    doc_ids: list[uuid.UUID],
+    phone: str,
+    timeout_s: float = _DOC_WAIT_TIMEOUT_S,
+) -> list[Document]:
+    """Block until every doc in `doc_ids` has a terminal status (ready/failed/cancelled)
+    or `timeout_s` elapses, whichever comes first.
+
+    Race-safe: subscribes to each doc's NOTIFY channel BEFORE checking current status,
+    so a transition that happens between the subscribe and the status read is still
+    received. Returns a fresh list of Document rows reflecting the final state.
+    """
+    if not doc_ids:
+        return []
+
+    events: asyncio.Queue[tuple[uuid.UUID, str]] = asyncio.Queue()
+    pending: set[uuid.UUID] = set(doc_ids)
+    watchers: list[asyncio.Task] = []
+
+    async def _watch(did: uuid.UUID) -> None:
+        channel = f"doc_{did.hex}"
+        try:
+            async for evt in pg_pubsub.subscribe(channel):
+                stage = evt.get("stage") or evt.get("status")
+                if stage in _TERMINAL_DOC_STATUSES:
+                    await events.put((did, stage))
+                    return
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.debug("doc_wait_subscribe_ended", extra={"doc_id": str(did)})
+
+    async def _refresh() -> list[Document]:
+        async with async_session_factory() as db:
+            return list(
+                (
+                    await db.execute(
+                        select(Document)
+                        .options(defer(Document.extracted_text))
+                        .where(
+                            Document.user_id == phone,
+                            Document.document_id.in_(doc_ids),
+                        )
+                    )
+                ).scalars().all()
+            )
+
+    try:
+        for did in doc_ids:
+            watchers.append(asyncio.create_task(_watch(did)))
+
+        # After subscribing, reconcile with current DB state — drops any doc
+        # that was already terminal before the watcher attached.
+        initial = await _refresh()
+        for d in initial:
+            if d.status in _TERMINAL_DOC_STATUSES:
+                pending.discard(d.document_id)
+        logger.info(
+            "doc_wait_pending_after_init",
+            extra={
+                "pending": [str(d) for d in pending],
+                "initial_statuses": {str(d.document_id): d.status for d in initial},
+            },
+        )
+
+        deadline = asyncio.get_event_loop().time() + timeout_s
+        while pending:
+            remaining = deadline - asyncio.get_event_loop().time()
+            if remaining <= 0:
+                logger.warning(
+                    "doc_wait_timeout",
+                    extra={"doc_ids": [str(d) for d in pending], "timeout_s": timeout_s},
+                )
+                break
+            try:
+                did, stage = await asyncio.wait_for(events.get(), timeout=remaining)
+                logger.info(
+                    "doc_wait_event",
+                    extra={"document_id": str(did), "stage": stage},
+                )
+            except asyncio.TimeoutError:
+                logger.warning("doc_wait_event_timeout", extra={"pending": [str(d) for d in pending]})
+                break
+            pending.discard(did)
+    finally:
+        for t in watchers:
+            t.cancel()
+        # Drain cancellations without leaking connections
+        for t in watchers:
+            try:
+                await t
+            except (asyncio.CancelledError, Exception):
+                pass
+
+    return await _refresh()
 
 
 def _get_runner() -> Live150Runner:
@@ -194,8 +298,10 @@ async def stream_chat(request: Request):
             db.add(ChatSession(session_id=session_id, user_id=phone))
             await db.commit()
 
-    # Persist the user message
-    user_msg_content = last_msg["content"]
+    # Persist the user message — raw user text only. Document framing is added
+    # to the runner input below but NOT stored, so history replay shows what
+    # the user actually typed (DocCards come from the chat_message_id join).
+    raw_user_content = last_msg["content"]
 
     user_message_id = uuid7()
     async with async_session_factory() as db:
@@ -216,24 +322,46 @@ async def stream_chat(request: Request):
             for d in attached_docs:
                 d.chat_message_id = user_message_id
 
-        if attached_docs:
-            lines = ["[Attached documents:"]
-            for d in attached_docs:
-                lines.append(
-                    f"- {d.original_filename} (status={d.status}, doc_type={d.doc_type}, "
-                    f"id={d.document_id}) — use get_document(id) to inspect"
-                )
-            lines.append("]")
-            user_msg_content = "\n".join(lines) + f"\n\n{user_msg_content}"
-
         db.add(ChatMessage(
             message_id=user_message_id,
             session_id=session_id,
             user_id=phone,
             role="user",
-            content=user_msg_content,
+            content=raw_user_content,
         ))
         await db.commit()
+
+    # Wait for attached docs to reach a terminal state before invoking the agent.
+    # Otherwise the agent races ahead of the processor and replies "I can't read
+    # that" before extracted_text exists. The client still sees the DocCard SSE
+    # progress (reading → summarizing → ready) during this wait.
+    if attached_docs:
+        doc_ids_to_wait = [d.document_id for d in attached_docs]
+        logger.info(
+            "doc_wait_start",
+            extra={
+                "doc_ids": [str(d) for d in doc_ids_to_wait],
+                "statuses": {str(d.document_id): d.status for d in attached_docs},
+            },
+        )
+        attached_docs = await _wait_for_docs_terminal(doc_ids_to_wait, phone=phone)
+        logger.info(
+            "doc_wait_done",
+            extra={"statuses": {str(d.document_id): d.status for d in attached_docs}},
+        )
+
+    # Frame attachments for the agent (this turn only — not persisted).
+    if attached_docs:
+        lines = ["[Attached documents:"]
+        for d in attached_docs:
+            lines.append(
+                f"- {d.original_filename} (status={d.status}, doc_type={d.doc_type}, "
+                f"id={d.document_id}) — use get_document(id) to inspect"
+            )
+        lines.append("]")
+        user_msg_content = "\n".join(lines) + f"\n\n{raw_user_content}"
+    else:
+        user_msg_content = raw_user_content
 
     def _flush_text(chunk: str) -> list[str]:
         """Append chunk to assistant text, emit or buffer depending on pending tool calls."""

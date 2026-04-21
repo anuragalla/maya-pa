@@ -41,12 +41,8 @@ class DocAnalysis(BaseModel):
         "vaccine",
         "other",
     ]
-    summary_detailed: str = Field(
-        ..., description="300-600 word narrative for main-agent recall"
-    )
-    extracted_text: str = Field(
-        ..., description="Full transcription, preserve tables where possible"
-    )
+    summary_detailed: str = Field(..., description="300-600 word narrative for main-agent recall")
+    extracted_text: str = Field(..., description="Full transcription, preserve tables where possible")
     tags: list[str] = Field(default_factory=list)
     structured: dict = Field(default_factory=dict)
     expiry_alert_date: date | None = None
@@ -153,7 +149,7 @@ def build_doc_agent() -> LlmAgent:
             "tags, expiry dates). Delegate here for any document analysis "
             "instead of answering from the main agent's context."
         ),
-        model="gemini-3.1-pro",
+        model="gemini-3.1-pro-preview",
         instruction=_DOC_INSTRUCTION,
         tools=[
             FunctionTool(func=get_health_goals),

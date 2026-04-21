@@ -24,8 +24,11 @@
 6. **Verify:** Empty state shows time-based greeting: "Good morning, Nigel" / "Good afternoon, Nigel" / "Good evening, Nigel" / "Up late, Nigel?" / "Winding down, Nigel?" — matches current time
 7. **Verify:** Empty state subtitle is "What would you like to know?"
 8. **Verify:** No static suggestion buttons in the empty state
-9. **Verify:** Input field shows placeholder "Ask anything"
-10. **Verify:** Send button is disabled (no input)
+9. **Verify:** Composer is a single rounded-2xl card with a soft shadow that deepens on focus
+10. **Verify:** Textarea placeholder reads "Reply…" (not "Ask anything")
+11. **Verify:** Bottom-left of the composer shows a paperclip icon Button (ghost variant, lucide Paperclip)
+12. **Verify:** Bottom-right of the composer shows the Send Button
+13. **Verify:** Send button is disabled (no input and no attachment)
 
 ### T1.2 — Theme toggle
 1. Click the sun/moon icon in the header
@@ -38,6 +41,7 @@
 2. Reload the page
 3. **Verify:** Previous conversation messages are visible on reload (loaded from `/api/v1/stream/history`)
 4. **Verify:** Empty state is NOT shown if history exists
+5. **Verify:** Any previously attached documents render as DocCards above their user message (via `chat_message_id` join)
 
 ---
 
@@ -156,6 +160,9 @@ The following tool names should display with these labels:
 | `check_calendar_connection` | Calendar Status |
 | `list_available_integrations` | Integrations |
 | `request_integration_connect` | Connect Integration |
+| `list_documents` | List Documents |
+| `get_document` | Get Document |
+| `doc_analyst` | Analyze Document |
 
 ### T5.3 — Tool call expandable
 1. Click on a completed tool call pill in the thinking block
@@ -302,6 +309,14 @@ The following tool names should display with these labels:
 2. **Verify:** Banner animates out and disappears
 3. **Verify:** The injected message remains in the conversation
 
+### T12.3 — Notifications arrive via SSE (no polling)
+1. Open devtools → Network tab, filter `notifications`
+2. **Verify:** One short-lived `GET /api/v1/notifications/catchup` on mount (backlog)
+3. **Verify:** One long-lived `GET /api/v1/notifications/events` (SSE — stays open)
+4. **Verify:** No recurring polling every 5 seconds against `/api/v1/notifications` — the old endpoint is gone
+5. Trigger a reminder via `create_reminder` with a 1-minute schedule
+6. **Verify:** When the reminder fires, the SSE stream delivers a `notification` event and the banner appears without a page refresh
+
 ---
 
 ## Suite 13: Error Handling
@@ -362,11 +377,245 @@ The following tool names should display with these labels:
 
 ---
 
+## Suite 16: Document Upload — Composer
+
+### T16.1 — Paperclip opens the file picker
+1. Click the paperclip Button in the composer
+2. **Verify:** Native file picker opens
+3. **Verify:** Picker is filtered to: `.pdf, .jpg, .jpeg, .png, .webp, .heic, .heif`
+
+### T16.2 — Staged attachment chip renders
+1. Pick a ≤25 MB PDF
+2. **Verify:** A DocAttachmentChip appears ABOVE the textarea, inside the same rounded card
+3. **Verify:** Chip shows the mime icon, filename (truncated if long), formatted size (`X.X MB`)
+4. **Verify:** Chip has an `✕` remove Button on the right
+5. **Verify:** Send Button is now enabled (because an attachment is staged)
+6. **Verify:** No upload has happened yet — this is pure staging (no network request to `/api/v1/documents`)
+
+### T16.3 — ✕ removes the staged attachment
+1. With a chip staged, click the `✕`
+2. **Verify:** Chip disappears
+3. **Verify:** Send Button is disabled again (no text, no attachment)
+
+### T16.4 — Single-attach replaces prior stage
+1. Stage a PDF
+2. Click paperclip again, pick a different file (PNG)
+3. **Verify:** Chip updates to the new file — the PDF is replaced, not added
+
+### T16.5 — Size cap enforcement (client-side)
+1. Try to pick a >25 MB file
+2. **Verify:** File is rejected; no chip appears (console warn `[composer] rejected size: …`)
+
+### T16.6 — MIME cap enforcement
+1. Try to pick a `.docx` or `.txt` (rename an arbitrary file to force it)
+2. **Verify:** File is rejected (console warn `[composer] rejected mime: …`)
+
+---
+
+## Suite 17: Document Upload — Send + Live Status
+
+### T17.1 — Upload happens on send
+1. Stage a small PDF lab result
+2. Type "summarize this" in the textarea
+3. Click Send
+4. **Verify:** Network: `POST /api/v1/documents` fires once (multipart/form-data)
+5. **Verify:** Response is `{document_id, status}` with status `"processing"` or `"uploaded"`
+6. **Verify:** User message bubble appears with a DocCard ABOVE the text
+7. **Verify:** Composer clears (text + staged file gone)
+
+### T17.2 — DocCard shows live SSE stages
+1. Immediately after send, inspect the DocCard
+2. **Verify:** Network: `GET /api/v1/documents/{id}/events` opens (EventSource-style, long-lived, `Content-Type: text/event-stream`)
+3. **Verify:** Card shows a Sparkles icon + shimmer over the title area
+4. **Verify:** Caption row text cycles through the stages as SSE events arrive:
+   - `reading` → "Maya is reading…"
+   - `context` → "Pulling your goals…"
+   - `summarizing` → "Summarizing…"
+5. **Verify:** Caption row has `aria-live="polite"`
+6. **Verify:** On `ready`, SSE stream closes; the card snaps to its final shape:
+   - Mime icon + filename
+   - 2-3 tag chips (shadcn `Badge variant="secondary"`)
+   - Doc type Badge right-aligned (e.g. "lab_result")
+
+### T17.3 — Failure state
+1. Force a failure (e.g., upload a corrupt PDF or disable Vertex AI temporarily)
+2. **Verify:** DocCard transitions to a destructive visual: red border, "Couldn't process this document." caption
+3. **Verify:** Processor logs the failure in the scheduler container logs
+
+### T17.4 — Upload error toast
+1. Upload while backend is down (stop agent container, try to send)
+2. **Verify:** Sonner toast appears at top-center: "Upload failed for …"
+3. **Verify:** No DocCard is added to the chat (request aborted before optimistic inject)
+
+### T17.5 — Agent reads the attached document
+1. Attach a lab PDF, message "walk me through this"
+2. **Verify:** Agent's thinking block includes a `get_document` tool call (new pill "Get Document")
+3. **Verify:** Response references specific markers / values from the PDF (proves the server injected the `[Attached documents: …]` framing and DocAgent produced structured output)
+
+---
+
+## Suite 18: Document Preview Pane (Right Side)
+
+### T18.1 — Click card opens the pane
+1. With a DocCard in status `ready`, click it
+2. **Verify:** URL gains `?doc=<id>&tab=summary` search params
+3. **Verify:** Right pane slides in from the right with a 220ms spring motion
+4. **Verify:** On desktop (≥1024px), the chat column reflows to the left half and the pane occupies the right half (50/50)
+5. **Verify:** On mobile (<1024px), the pane is full-screen (chat is hidden)
+6. **Verify:** Pane header shows:
+   - Close `←` Button (ghost icon)
+   - Truncated filename
+   - Subtitle: `<doc_type> · <relative time>` (e.g. "lab_result · 2 minutes ago")
+   - `⋯` DropdownMenu trigger
+   - `✕` close Button
+
+### T18.2 — Tabs work
+1. Pane open, default tab is `Summary` (per the `openDoc(id, 'summary')` in DocCard)
+2. **Verify:** Underline tabs (not pill tabs), active tab has a bottom underline
+3. Click the `Preview` tab
+4. **Verify:** URL search updates to `?doc=<id>&tab=preview`
+5. **Verify:** Tab content cross-fades on switch
+
+### T18.3 — Close via ✕ and ← buttons
+1. Click `✕`
+2. **Verify:** Pane animates out; URL search params `doc` and `tab` are cleared
+3. **Verify:** Chat column reflows back to full width
+
+### T18.4 — Close via browser back
+1. Open pane, then press browser back button
+2. **Verify:** Pane closes; chat column restored
+
+### T18.5 — Close via Escape
+1. Pane open, press `Escape` (focus anywhere inside pane)
+2. **Verify:** Pane closes
+
+### T18.6 — Deep-link via URL
+1. Copy a pane URL (e.g. `http://localhost:3000/?doc=<real-id>&tab=summary`)
+2. Paste into a new tab (still logged in as same phone)
+3. **Verify:** App loads with the pane already open on that document
+
+---
+
+## Suite 19: Preview Tab
+
+### T19.1 — PDF viewer renders
+1. Open a PDF document in the pane, select Preview tab
+2. **Verify:** `react-pdf` renders page 1 centered on `bg-muted/20`
+3. **Verify:** Footer toolbar shows: `‹` page-prev, `1 / N`, `›` page-next, `−`, `100%`, `+`
+4. **Verify:** Skeleton shows briefly while the blob loads (via `GET /api/v1/documents/{id}/content`)
+5. Click `›` → page advances; `1 / N` updates
+6. At page 1: `‹` is disabled. At last page: `›` is disabled.
+7. Click `+` to zoom to 110%, 120%, 130%…
+8. **Verify:** Zoom caps at 250% (`+` disables / clamps)
+9. Click `−` to reduce below 100%
+10. **Verify:** Zoom floor is 50%
+11. Double-click the page area
+12. **Verify:** Zoom resets to 100%
+
+### T19.2 — Image viewer renders (JPG/PNG/WEBP)
+1. Upload a JPG and open its Preview
+2. **Verify:** Centered `<img>` with `object-contain` on `bg-muted/20`
+3. **Verify:** No PDF toolbar (not a PDF)
+
+### T19.3 — HEIC on Safari vs Chromium
+1. Upload a HEIC image
+2. **On Safari:** Image renders natively
+3. **On Chrome/Firefox:** `<img>` `onError` fires → viewer falls back to a download panel with a Download Button
+
+### T19.4 — Download from `⋯` menu
+1. Open any document's pane, click the `⋯` header menu
+2. Click "Download"
+3. **Verify:** Browser downloads the original file with its `original_filename`
+
+### T19.5 — Delete from `⋯` menu
+1. Open any document's pane, click `⋯` → "Delete"
+2. **Verify:** An `AlertDialog` asks for confirmation
+3. Click Confirm
+4. **Verify:** Network: `DELETE /api/v1/documents/{id}` fires
+5. **Verify:** Pane closes
+6. **Verify:** The DocCard in chat disappears (or shows cancelled/deleted) — exact behavior depends on how TanStack Query refreshes; at minimum the pane data goes stale and can't be re-opened
+
+---
+
+## Suite 20: Summary Tab
+
+### T20.1 — Summary while processing
+1. Open the pane while the doc is still in `processing`
+2. **Verify:** Summary tab shows a status banner ("Still processing — summary will appear here.")
+3. **Verify:** Skeleton lines where the markdown will land
+4. **Verify:** When SSE transitions to `ready`, the tab auto-refreshes to show real content
+
+### T20.2 — Detailed summary (markdown)
+1. Open a `ready` doc, Summary tab
+2. **Verify:** `summary_detailed` renders via `streamdown` — markdown formatted (bold, lists, tables where emitted)
+3. **Verify:** Summary is 300–600 words, personalized (references the user's goals / recent trends when applicable)
+
+### T20.3 — Tag chips
+1. Summary tab with a `lab_result` doc
+2. **Verify:** Below the summary, 2-5 `Badge` chips show tags (e.g. `lipid-panel`, `cholesterol`, `ldl-elevated`)
+
+### T20.4 — Structured — lab result
+1. With a lab doc, scroll below the tag chips
+2. **Verify:** A shadcn `Table` renders the markers: columns for Name, Value, Unit, Range
+3. **Verify:** Row count matches the extracted markers
+
+### T20.5 — Structured — prescription
+1. Upload a prescription, open Summary
+2. **Verify:** A key/value grid shows: drug, dose, frequency, fill_date, days_supply, expiry_alert_date (if set)
+3. **Verify:** If `expiry_alert_date` is set, a one-off renewal reminder was scheduled server-side (visible via `list_reminders` in a new chat turn)
+
+### T20.6 — Structured — other types
+1. For `other` / `imaging` / `visit_note` / `insurance` / `vaccine`: scroll to structured
+2. **Verify:** A `Collapsible` shows the raw `structured` JSON inside a monospace `<pre>` (no fabricated UI for types we don't specifically template)
+
+### T20.7 — Raw extracted text disclosure
+1. At the bottom of the Summary tab, click "Show raw text" (or similar collapsible trigger)
+2. **Verify:** A `ScrollArea` expands with the full `extracted_text` in monospace, whitespace preserved
+3. **Verify:** `GET /api/v1/documents/{id}?include_extracted_text=true` is called OR the full row was already fetched with extracted text
+4. Collapse
+5. **Verify:** Panel closes cleanly
+
+---
+
+## Suite 21: Cancel During Processing
+
+### T21.1 — Delete a processing doc
+1. Upload a large PDF; while status is still `processing`, open the pane and Delete
+2. **Verify:** Network: `DELETE /api/v1/documents/{id}` succeeds
+3. **Verify:** The processor logs a `doc processing cancelled mid-flight` line (in scheduler logs)
+4. **Verify:** No memory entry is written, no renewal reminder created
+5. **Verify:** The DocCard's SSE stream emits a terminal event and closes
+
+---
+
 ## Execution Notes
 
-- Run each suite sequentially within a user, but suites for different users can run in parallel
-- Screenshot key states: empty state (note time-based greeting), tool call expanded, error state, each user's greeting, notification banner, suggestion pills
-- If a test fails, log: the exact message sent, the full response received, any console errors
-- The backend auto-reloads on code changes; the frontend requires `docker compose up --force-recreate --build -d web`
-- Streaming responses may take 5-15 seconds depending on Vertex AI latency
-- History loading is async — allow 1-2s on page load before asserting empty state
+### Local dev stack
+
+- Backend runs in docker: `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d agent scheduler postgres migrator`
+- The nginx `web` container is NOT used locally — start Vite for HMR: `cd web && bun dev --port 3000`
+- `bun dev` uses port 3000 (not the default 5173) so it matches the CORS allowlist in `server/main.py` and the OAuth redirect in `.env.local`
+- Agent auto-reloads on code edits via `--reload` (source mounted). Frontend HMR is instant via Vite.
+
+### DocAgent test prerequisites
+
+- GCS bucket `gs://live150-docs-dev` must exist in `clawdbot-project-489814` (or whichever project matches `GOOGLE_CLOUD_PROJECT`). Verified once at setup.
+- ADC must be logged in with the same project: `gcloud auth application-default login`.
+- Alembic head must be `d4e5f6a7b8c9` (adds `document` table + `chat_message_id` column + `cancelled` status). Verify with `docker exec maya-pa-postgres-1 psql -U live150 -d live150 -c "SELECT version_num FROM alembic_version;"`.
+- Gemini 3.1 Pro (used by DocAgent) must be enabled on the project (`aiplatform.googleapis.com`).
+
+### Observability while testing DocAgent
+
+- **Agent logs:** `docker logs -f maya-pa-agent-1` — upload + SSE endpoint calls, DELETE, history joins.
+- **Scheduler logs:** `docker logs -f maya-pa-scheduler-1` — this is where `process_document` runs; watch for the four stage publishes (reading/context/summarizing/ready) and any Pydantic validation errors on the Gemini output.
+- **Postgres:** NOTIFY channels are `doc_<uuid_hex>` and `notif_<sha256 of phone, first 16 hex chars>`. You can `psql` in and `LISTEN doc_<...>` to watch raw events.
+- **Network:** In browser devtools, SSE streams show as pending `text/event-stream` fetches; expect one active per mounted DocCard in a non-terminal status.
+
+### Running the suites
+
+- Run each suite sequentially within a user; suites for different users can run in parallel.
+- Screenshot key states: empty state (note time-based greeting), tool call expanded, error state, each user's greeting, notification banner, suggestion pills, DocCard processing / ready / failed, right pane Preview + Summary, PDF zoom controls.
+- Document-processing turns may take 20–90 seconds on first PDF (Gemini 3.1 Pro is slower than Flash-Lite); subsequent uploads reuse the cached DocAgent instance.
+- If a test fails, log: the exact message sent, the full response received, any console errors, and the relevant container log window.
+- Streaming chat responses take 5–15s depending on Vertex AI latency.
+- History loading is async — allow 1-2s on page load before asserting empty state.

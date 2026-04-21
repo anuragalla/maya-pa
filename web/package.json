@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/react": "^1.2.0",
+    "@assistant-ui/react": "^0.12.25",
     "@base-ui/react": "^1.4.1",
     "@fontsource-variable/dm-sans": "^5.2.8",
     "@fontsource-variable/fraunces": "^5.2.9",
@@ -51,7 +52,7 @@
     "motion": "^12.38.0",
     "nanoid": "^5.1.9",
     "next-themes": "^0.4.6",
-    "pdfjs-dist": "^5.6.205",
+    "pdfjs-dist": "5.4.296",
     "react": "^19.0.0",
     "react-day-picker": "^9.14.0",
     "react-dom": "^19.0.0",

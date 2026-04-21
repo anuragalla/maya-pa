@@ -1,5 +1,6 @@
 import { createRootRoute, Outlet, useNavigate, useLocation } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/hooks/use-theme";
@@ -11,6 +12,7 @@ export const Route = createRootRoute({
 function RootLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [queryClient] = useState(() => new QueryClient());
 
   useEffect(() => {
     if (location.pathname === "/login") return;
@@ -20,11 +22,13 @@ function RootLayout() {
   }, [location.pathname, navigate]);
 
   return (
-    <ThemeProvider>
-      <TooltipProvider>
-        <Outlet />
-        <Toaster position="top-center" />
-      </TooltipProvider>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <TooltipProvider>
+          <Outlet />
+          <Toaster position="top-center" />
+        </TooltipProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }

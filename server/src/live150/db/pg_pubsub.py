@@ -52,7 +52,8 @@ async def publish(channel: str, envelope: dict[str, Any]) -> None:
         body = json.dumps(trimmed, default=str)
     try:
         conn = await _get_publisher()
-        await conn.execute(f"NOTIFY {channel}, $1", body)
+        # NOTIFY doesn't accept bind parameters in asyncpg; use pg_notify() which does.
+        await conn.execute("SELECT pg_notify($1, $2)", channel, body)
     except Exception:
         logger.exception("pg_publish_failed", extra={"channel": channel})
 

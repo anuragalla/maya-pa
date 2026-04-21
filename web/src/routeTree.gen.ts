@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ThemesRouteImport } from './routes/themes'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as Chatv2RouteImport } from './routes/chatv2'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OauthSuccessRouteImport } from './routes/oauth.success'
 
@@ -22,6 +23,11 @@ const ThemesRoute = ThemesRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Chatv2Route = Chatv2RouteImport.update({
+  id: '/chatv2',
+  path: '/chatv2',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -37,12 +43,14 @@ const OauthSuccessRoute = OauthSuccessRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/chatv2': typeof Chatv2Route
   '/login': typeof LoginRoute
   '/themes': typeof ThemesRoute
   '/oauth/success': typeof OauthSuccessRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/chatv2': typeof Chatv2Route
   '/login': typeof LoginRoute
   '/themes': typeof ThemesRoute
   '/oauth/success': typeof OauthSuccessRoute
@@ -50,20 +58,22 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/chatv2': typeof Chatv2Route
   '/login': typeof LoginRoute
   '/themes': typeof ThemesRoute
   '/oauth/success': typeof OauthSuccessRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/themes' | '/oauth/success'
+  fullPaths: '/' | '/chatv2' | '/login' | '/themes' | '/oauth/success'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/themes' | '/oauth/success'
-  id: '__root__' | '/' | '/login' | '/themes' | '/oauth/success'
+  to: '/' | '/chatv2' | '/login' | '/themes' | '/oauth/success'
+  id: '__root__' | '/' | '/chatv2' | '/login' | '/themes' | '/oauth/success'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  Chatv2Route: typeof Chatv2Route
   LoginRoute: typeof LoginRoute
   ThemesRoute: typeof ThemesRoute
   OauthSuccessRoute: typeof OauthSuccessRoute
@@ -85,6 +95,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/chatv2': {
+      id: '/chatv2'
+      path: '/chatv2'
+      fullPath: '/chatv2'
+      preLoaderRoute: typeof Chatv2RouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -104,6 +121,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  Chatv2Route: Chatv2Route,
   LoginRoute: LoginRoute,
   ThemesRoute: ThemesRoute,
   OauthSuccessRoute: OauthSuccessRoute,

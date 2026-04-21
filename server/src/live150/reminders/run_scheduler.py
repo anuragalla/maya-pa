@@ -7,6 +7,7 @@ import asyncio
 import logging
 import signal
 
+from live150.documents.processor import sweep_stale_processing
 from live150.logging import setup_logging
 from live150.reminders.scheduler import get_scheduler
 from live150.reminders.summary_jobs import (
@@ -26,6 +27,14 @@ async def _poll_noop() -> None:
 async def main() -> None:
     setup_logging()
     logger.info("Starting scheduler process")
+
+    # Clean up docs stuck in uploaded/processing from a prior crash or restart.
+    # Runs before the scheduler starts so in-flight rows from previous life are
+    # resolved to `failed` with a clear message rather than hanging forever.
+    try:
+        await sweep_stale_processing()
+    except Exception:
+        logger.exception("doc_sweep_startup_failed")
 
     scheduler = get_scheduler()
     scheduler.start()

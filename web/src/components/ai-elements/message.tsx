@@ -55,7 +55,7 @@ export const MessageContent = ({
   <div
     className={cn(
       "flex min-w-0 max-w-full flex-col gap-2 overflow-hidden text-sm",
-      "group-[.is-user]:w-fit group-[.is-user]:ml-auto group-[.is-user]:rounded-2xl group-[.is-user]:rounded-br-md group-[.is-user]:bg-primary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-white",
+      "group-[.is-user]:w-fit group-[.is-user]:ml-auto group-[.is-user]:rounded-2xl group-[.is-user]:rounded-br-md group-[.is-user]:bg-primary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-primary-foreground",
       "group-[.is-assistant]:w-full group-[.is-assistant]:text-foreground",
       className
     )}
@@ -353,6 +353,8 @@ export const MessageResponse = memo(
     <Streamdown
       className={cn(
         "prose prose-sm dark:prose-invert max-w-none",
+        // Inside user bubbles, force light-on-primary palette regardless of theme
+        "group-[.is-user]:prose-invert group-[.is-user]:prose-p:text-primary-foreground group-[.is-user]:prose-li:text-primary-foreground group-[.is-user]:prose-strong:text-primary-foreground group-[.is-user]:prose-headings:text-primary-foreground",
         "prose-p:leading-relaxed prose-p:my-1.5",
         "prose-headings:text-foreground prose-headings:font-semibold",
         "prose-h2:text-base prose-h2:mt-4 prose-h2:mb-2",

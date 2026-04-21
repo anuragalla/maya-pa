@@ -54,6 +54,12 @@ interface ChatViewProps {
 
 export function ChatView({ phone, userName }: ChatViewProps) {
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  // Documents attached to client-submitted messages. Kept separate from the
+  // useChat `messages` state because useChat overwrites unknown fields during
+  // streaming, which was erasing DocCards mid-turn. Keyed by message id.
+  const [localDocsByMsgId, setLocalDocsByMsgId] = useState<
+    Record<string, MessageDocAttachment[]>
+  >({});
 
   const {
     messages,
@@ -151,32 +157,27 @@ export function ChatView({ phone, userName }: ChatViewProps) {
         }
       }
 
-      // Optimistic inject so the user sees the bubble + cards instantly,
-      // then send a payload-only request that carries the doc IDs but no
-      // duplicate echo from useChat.
+      // Pre-generate the id so the attachment mapping can be seeded BEFORE
+      // useChat adds the user message to state — that way the DocCards render
+      // on the very first paint of the user bubble, not after streaming.
+      const msgId = nanoid();
       if (uploaded.length > 0) {
-        const id = nanoid();
-        const msg: Live150Message = {
-          id,
-          role: "user",
-          content: trimmed,
-          createdAt: new Date(),
-          documents: uploaded,
-        };
-        setMessages((prev) => [...prev, msg as Message]);
-        await append(
-          { role: "user", content: trimmed || "(attached document)" },
-          {
-            body: { documents: uploaded.map((d) => d.document_id) },
-            allowEmptySubmit: true,
-          } as Parameters<typeof append>[1],
-        );
-      } else {
-        await append({ role: "user", content: trimmed });
+        setLocalDocsByMsgId((prev) => ({ ...prev, [msgId]: uploaded }));
       }
+
+      await append(
+        { id: msgId, role: "user", content: trimmed || "(attached document)" },
+        uploaded.length > 0
+          ? ({
+              body: { documents: uploaded.map((d) => d.document_id) },
+              allowEmptySubmit: true,
+            } as Parameters<typeof append>[1])
+          : undefined,
+      );
+
       setInput("");
     },
-    [append, phone, setInput, setMessages, upload],
+    [append, phone, setInput, upload],
   );
 
   return (
@@ -201,20 +202,30 @@ export function ChatView({ phone, userName }: ChatViewProps) {
           )}
 
           <AnimatePresence initial={false}>
-            {messages.map((message: any, idx: number) => (
-              <motion.div
-                key={message.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-              >
-                <ChatMessageItem
-                  message={message}
-                  isStreaming={isStreaming && idx === messages.length - 1}
-                  phone={phone}
-                />
-              </motion.div>
-            ))}
+            {messages.map((message: any, idx: number) => {
+              // Prefer documents already on the message (from history load);
+              // fall back to the local map for client-submitted messages.
+              const merged =
+                message.documents && message.documents.length > 0
+                  ? message
+                  : localDocsByMsgId[message.id]
+                    ? { ...message, documents: localDocsByMsgId[message.id] }
+                    : message;
+              return (
+                <motion.div
+                  key={message.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                >
+                  <ChatMessageItem
+                    message={merged}
+                    isStreaming={isStreaming && idx === messages.length - 1}
+                    phone={phone}
+                  />
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
 
           {error && (
