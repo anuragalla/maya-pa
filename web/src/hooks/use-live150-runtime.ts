@@ -298,7 +298,31 @@ export function useLive150Runtime({ phone, uploadDoc }: UseLive150RuntimeArgs) {
     },
   });
 
+  // Append an assistant message out-of-band — used by notifications/reminders
+  // that originate server-side and need to land in the chat without going
+  // through the composer. De-duplicates on message id so repeated catchup
+  // deliveries don't double-render.
+  const injectAssistantMessage = useCallback(
+    (id: string, text: string, createdAt?: Date) => {
+      if (!id || !text) return;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === id)) return prev;
+        return [
+          ...prev,
+          {
+            id,
+            role: "assistant",
+            text,
+            toolCalls: [],
+            createdAt: createdAt ?? new Date(),
+          },
+        ];
+      });
+    },
+    [],
+  );
+
   // Return the raw messages too so the UI can read suggestions / documents
   // from the last assistant / user message without going through the runtime.
-  return { runtime, messages, isRunning, isLoading };
+  return { runtime, messages, isRunning, isLoading, injectAssistantMessage };
 }
