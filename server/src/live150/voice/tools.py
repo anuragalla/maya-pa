@@ -13,6 +13,7 @@ The **ctx kwargs carry:
 """
 
 import asyncio
+import json
 import logging
 from datetime import datetime, timezone
 
@@ -442,9 +443,8 @@ async def _handle_get_progress(args: dict, user_phone: str, db, **ctx) -> dict:
             )
             r.raise_for_status()
             text = r.text
-            import json as _json
             if text.startswith('"') and text.endswith('"'):
-                text = _json.loads(text)
+                text = json.loads(text)
     except Exception as e:
         logger.warning("voice:get_progress failed", extra={"user_phone": user_phone, "error": str(e)})
         return {"error": True, "date": date_lookup, "message": f"Could not fetch progress: {e}"}
