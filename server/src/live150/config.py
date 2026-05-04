@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     notify_url: str = "http://localhost:8000/api/v1/notifications/push"
     service_api_token: str = ""
 
+    # Liv150 API (new backend) — used by voice tools
+    liv150_api_base: str = "http://localhost:8001"
+
     # OAuth
     oauth_redirect_base: str = "http://localhost:8000/api/v1"  # base URL for OAuth callbacks
     oauth_success_redirect: str = "http://localhost:3000"  # where to redirect after OAuth success
