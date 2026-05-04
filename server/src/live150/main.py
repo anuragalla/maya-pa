@@ -12,7 +12,7 @@ from live150.db.session import engine
 from live150.logging import setup_logging
 
 _GATE_COOKIE = "maya_gate"
-_GATE_SKIP = {"/health", "/ready", "/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/notifications/push"}
+_GATE_SKIP = {"/health", "/ready", "/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/notifications/push", "/api/v1/voice/ws", "/api/v1/voice/prewarm"}
 
 logger = logging.getLogger(__name__)
 
