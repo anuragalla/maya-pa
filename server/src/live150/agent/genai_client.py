@@ -19,6 +19,6 @@ def get_genai_client() -> "Client":
 
     return genai.Client(
         vertexai=True,
-        project=os.environ.get("GOOGLE_CLOUD_PROJECT", "live150-dev"),
+        project=os.environ.get("GOOGLE_CLOUD_PROJECT", "clawdbot-project-489814"),
         location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
     )

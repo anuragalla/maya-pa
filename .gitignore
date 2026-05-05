@@ -26,7 +26,6 @@ pgdata/
 # Skills
 .agents/
 .claude/skills/
-skills-lock.json
 
 # Tool caches
 .deepeval/
