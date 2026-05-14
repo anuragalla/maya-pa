@@ -22,8 +22,9 @@ _memory_service = MemoryService()
 
 
 def _decode_token(token: str) -> dict | None:
+    """Decode a liv150-api JWT. Returns claims or None."""
     try:
-        return jwt.decode(token, settings.gate_jwt_secret, algorithms=["HS256"])
+        return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
     except jwt.PyJWTError:
         return None
 
@@ -55,9 +56,10 @@ async def voice_ws(websocket: WebSocket, token: str = ""):
         await websocket.close(code=4001, reason="Invalid token")
         return
 
-    user_phone = claims.get("sub", "")
-    if not user_phone:
-        await websocket.close(code=4001, reason="Invalid token: no sub")
+    user_id = claims.get("sub", "")
+    user_phone = claims.get("phone", "")
+    if not user_id or not user_phone:
+        await websocket.close(code=4001, reason="Invalid token: missing claims")
         return
 
     await websocket.accept()

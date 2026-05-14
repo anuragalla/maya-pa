@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     gate_password: str = ""
     gate_jwt_secret: str = "change-me-in-prod"
 
+    # JWT (shared with liv150-api)
+    jwt_secret: str = "change-me-in-prod"
+    jwt_algorithm: str = "HS256"
+
     # Gemini
     gemini_api_key: str = ""
 
