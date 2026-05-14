@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     gate_password: str = ""
     gate_jwt_secret: str = "change-me-in-prod"
 
+    # Gemini
+    gemini_api_key: str = ""
+
     # Misc
     profile_ttl_minutes: int = 60
     rate_limit_chat_per_5min: int = 60

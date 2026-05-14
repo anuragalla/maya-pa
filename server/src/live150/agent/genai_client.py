@@ -1,7 +1,7 @@
-"""Shared, cached `google.genai` Vertex client.
+"""Shared, cached `google.genai` client.
 
-All Gemini 3.1 models use the `global` endpoint. One cached client.
-Lazy-imports `google.genai` so tests don't need GCP credentials.
+Single cached client using API key auth.
+Lazy-imports `google.genai` so tests don't need credentials.
 """
 
 import os
@@ -14,11 +14,9 @@ if TYPE_CHECKING:
 
 @lru_cache(maxsize=1)
 def get_genai_client() -> "Client":
-    """Return a cached Vertex client using process env vars."""
+    """Return a cached Gemini client using API key."""
     from google import genai
 
     return genai.Client(
-        vertexai=True,
-        project=os.environ.get("GOOGLE_CLOUD_PROJECT", "clawdbot-project-489814"),
-        location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
+        api_key=os.environ.get("LIVE150_GEMINI_API_KEY", ""),
     )
