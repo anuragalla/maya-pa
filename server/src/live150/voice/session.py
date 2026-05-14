@@ -23,7 +23,7 @@ from live150.voice.tools import TOOL_HANDLERS, get_tool_config
 
 logger = logging.getLogger(__name__)
 
-VOICE_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
+VOICE_MODEL = "gemini-3.1-flash-live-preview"
 
 State = Literal["idle", "listening", "thinking", "speaking"]
 
