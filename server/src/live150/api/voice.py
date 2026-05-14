@@ -13,6 +13,7 @@ import httpx
 from live150.config import settings
 from live150.db.session import async_session_factory, engine
 from live150.memory.service import MemoryService
+from live150.voice.onboarding_session import OnboardingVoiceSession
 from live150.voice.session import VoiceSession
 
 logger = logging.getLogger(__name__)
@@ -123,6 +124,47 @@ async def voice_ws(websocket: WebSocket, token: str = ""):
     finally:
         await session.close()
         logger.info("voice_session_closed", extra={"user": user_phone})
+
+
+@router.websocket("/onboarding/ws")
+async def onboarding_voice_ws(websocket: WebSocket, token: str = ""):
+    if not token:
+        await websocket.close(code=4001, reason="Missing token")
+        return
+
+    claims = _decode_token(token)
+    if not claims:
+        await websocket.close(code=4001, reason="Invalid token")
+        return
+
+    user_id = claims.get("sub", "")
+    user_phone = claims.get("phone", "")
+    if not user_id or not user_phone:
+        await websocket.close(code=4001, reason="Invalid token: missing claims")
+        return
+
+    await websocket.accept()
+    logger.info("onboarding_voice_ws_connected", extra={"user": user_phone})
+
+    profile = await _load_user_profile(token)
+    display_name = (profile.get("display_name") or "there") if profile else "there"
+
+    session = OnboardingVoiceSession(user_id=user_id, user_phone=user_phone)
+
+    try:
+        await session.connect(display_name=display_name)
+        await websocket.send_json({"type": "state", "state": "listening"})
+        await session.relay(websocket)
+
+    except WebSocketDisconnect:
+        logger.info("onboarding_voice_ws_disconnected", extra={"user": user_phone})
+    except Exception as e:
+        logger.error("onboarding_voice_ws_error", extra={"user": user_phone, "error": str(e)})
+        if websocket.client_state == WebSocketState.CONNECTED:
+            await websocket.close(code=1011, reason="Internal error")
+    finally:
+        await session.close()
+        logger.info("onboarding_voice_session_closed", extra={"user": user_phone})
 
 
 @router.post("/prewarm", status_code=204)
