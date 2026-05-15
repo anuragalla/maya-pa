@@ -122,16 +122,19 @@ class VoiceSession:
     async def _outbound_loop(self, websocket: Any) -> None:
         try:
             async for msg in self._gemini_session.receive():
-                if msg.server_content and msg.server_content.parts:
-                    for part in msg.server_content.parts:
-                        if part.inline_data and part.inline_data.data:
-                            self.state = "speaking"
-                            await websocket.send_json({
-                                "type": "audio",
-                                "data": base64.b64encode(part.inline_data.data).decode(),
-                            })
+                sc = msg.server_content
+                if sc:
+                    turn = sc.model_turn
+                    if turn and turn.parts:
+                        for part in turn.parts:
+                            if part.inline_data and part.inline_data.data:
+                                self.state = "speaking"
+                                await websocket.send_json({
+                                    "type": "audio",
+                                    "data": base64.b64encode(part.inline_data.data).decode(),
+                                })
 
-                    if msg.server_content.turn_complete:
+                    if sc.turn_complete:
                         self.state = "listening"
                         await websocket.send_json({"type": "state", "state": "listening"})
 

@@ -127,7 +127,7 @@ async def voice_ws(websocket: WebSocket, token: str = ""):
 
 
 @router.websocket("/onboarding/ws")
-async def onboarding_voice_ws(websocket: WebSocket, token: str = ""):
+async def onboarding_voice_ws(websocket: WebSocket, token: str = "", step: str = "age"):
     if not token:
         await websocket.close(code=4001, reason="Missing token")
         return
@@ -152,7 +152,7 @@ async def onboarding_voice_ws(websocket: WebSocket, token: str = ""):
     session = OnboardingVoiceSession(user_id=user_id, user_phone=user_phone)
 
     try:
-        await session.connect(display_name=display_name)
+        await session.connect(display_name=display_name, current_step=step)
         await websocket.send_json({"type": "state", "state": "listening"})
         await session.relay(websocket)
 

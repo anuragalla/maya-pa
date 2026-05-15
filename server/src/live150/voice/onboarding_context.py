@@ -45,5 +45,22 @@ def build_onboarding_system_prompt() -> str:
     return ONBOARDING_SYSTEM_PROMPT
 
 
-def build_onboarding_user_context(display_name: str) -> str:
-    return f"The user's name is {display_name}. They just completed the name step and are ready for voice-guided onboarding. Greet them briefly by name and ask their age."
+STEP_QUESTIONS: dict[str, str] = {
+    "age": "ask how old they are",
+    "gender": "ask how they identify",
+    "height": "ask how tall they are",
+    "weight": "ask their weight",
+    "conditions": "ask if they have any health conditions",
+    "goals": "ask what health goals they want to focus on",
+    "diet": "ask about their diet preference",
+}
+
+
+def build_onboarding_user_context(display_name: str, current_step: str = "age") -> str:
+    question = STEP_QUESTIONS.get(current_step, STEP_QUESTIONS["age"])
+    return (
+        f"The user's name is {display_name}. "
+        f"Introduce yourself as Maya, their health companion. "
+        f"Let them know they can simply speak their answers instead of typing — you'll fill in the form for them. "
+        f"Keep the intro to two sentences max, then {question}."
+    )

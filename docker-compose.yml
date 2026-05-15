@@ -29,9 +29,6 @@ services:
     volumes:
       # Mount source code for auto-reload in dev
       - ./server/src:/app/src
-      - /home/anurag/.config/gcloud:/home/app/.config/gcloud:ro
-    environment:
-      - GOOGLE_APPLICATION_CREDENTIALS=/home/app/.config/gcloud/application_default_credentials.json
     command: ["uvicorn", "live150.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/src"]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
