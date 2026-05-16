@@ -29,3 +29,4 @@ pgdata/
 
 # Tool caches
 .deepeval/
+.env copy
