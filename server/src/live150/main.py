@@ -12,7 +12,7 @@ from live150.db.session import engine
 from live150.logging import setup_logging
 
 _GATE_COOKIE = "maya_gate"
-_GATE_SKIP = {"/health", "/ready", "/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/notifications/push", "/api/v1/voice/ws", "/api/v1/voice/prewarm"}
+_GATE_SKIP = {"/health", "/ready", "/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/notifications/push", "/api/v1/voice/ws", "/api/v1/voice/prewarm", "/api/v1/snap/analyze"}
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +120,7 @@ from live150.api.confirmations import router as confirmations_router  # noqa: E4
 from live150.api.notifications import router as notifications_router  # noqa: E402
 from live150.api.documents import router as documents_router  # noqa: E402
 from live150.api.voice import router as voice_router  # noqa: E402
+from live150.api.snap import router as snap_router  # noqa: E402
 api_v1 = APIRouter(prefix="/api/v1")
 api_v1.include_router(auth_router, prefix="/auth")
 api_v1.include_router(chat_router, prefix="/chat")
@@ -130,4 +131,5 @@ api_v1.include_router(confirmations_router, prefix="/confirmations")
 api_v1.include_router(notifications_router, prefix="/notifications")
 api_v1.include_router(documents_router, prefix="/documents")
 api_v1.include_router(voice_router, prefix="/voice")
+api_v1.include_router(snap_router, prefix="/snap")
 app.include_router(api_v1)
